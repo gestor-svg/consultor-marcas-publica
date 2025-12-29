@@ -361,8 +361,8 @@ def home():
 @app.route('/analizar', methods=['POST'])
 def analizar():
     """
-    Endpoint principal: Analiza la marca con IA
-    Ya NO intenta buscar en IMPI automáticamente (no es confiable)
+    Endpoint principal - VERSIÓN PÚBLICA
+    Usa búsqueda simple del IMPI + Gemini
     """
     data = request.json
     marca = data.get('marca', '').strip()
@@ -378,15 +378,24 @@ def analizar():
     print(f"Tipo: {tipo_negocio}")
     print(f"{'='*70}")
     
-    # Clasificar con Gemini
+    # 1. Clasificar con Gemini
     clasificacion = clasificar_con_gemini(descripcion, tipo_negocio)
     
-    # Preparar respuesta PROFESIONAL Y HONESTA
-    mensaje = f"Hemos analizado '{marca}' y determinado la clasificación adecuada para tu tipo de negocio."
-    icono = "✓"
-    color = "info"
-    mostrar_formulario = True
-    cta = f"Para verificar la disponibilidad real de esta marca en el IMPI y proceder con el registro, déjanos tus datos. Realizaremos un análisis técnico completo y te contactaremos dentro de 24 horas."
+    # 2. Búsqueda simple en IMPI (solo denominación exacta)
+    status_impi = buscar_impi_simple(marca)
+    
+    # 3. Preparar respuesta según resultado
+    if status_impi == "POSIBLEMENTE_DISPONIBLE":
+        mensaje = f"Buenas noticias: No encontramos coincidencias exactas de '{marca}' en el IMPI."
+        icono = "✓"
+        color = "success"
+        cta = "Sin embargo, se requiere un análisis fonético completo para garantizar la disponibilidad. Déjanos tus datos para realizar el estudio técnico profesional."
+        
+    else:  # REQUIERE_ANALISIS o ERROR
+        mensaje = f"La marca '{marca}' requiere un análisis técnico profesional."
+        icono = "🔍"
+        color = "info"
+        cta = "Para verificar similitudes fonéticas, gráficas y en todas las clases relevantes, déjanos tus datos. Te contactaremos dentro de 24 horas con un reporte completo."
     
     resultado = {
         "mensaje": mensaje,
@@ -395,13 +404,13 @@ def analizar():
         "clase_sugerida": f"Clase {clasificacion['clase_principal']}: {clasificacion['clase_nombre']}",
         "clases_adicionales": clasificacion.get('clases_adicionales', []),
         "nota_tecnica": clasificacion.get('nota', ''),
-        "mostrar_formulario": mostrar_formulario,
+        "mostrar_formulario": True,
         "cta": cta,
-        "status_impi": "REQUIERE_ANALISIS",  # Siempre requiere análisis profesional
+        "status_impi": status_impi,
         "tipo_negocio": tipo_negocio
     }
     
-    print(f"[RESULTADO] Clase {clasificacion['clase_principal']} sugerida")
+    print(f"[RESULTADO] Status: {status_impi}, Clase: {clasificacion['clase_principal']}")
     print(f"{'='*70}\n")
     
     return jsonify(resultado)
