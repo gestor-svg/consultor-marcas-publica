@@ -70,13 +70,13 @@ Recuerda:
         response = model.generate_content(
             prompt,
             generation_config=genai.GenerationConfig(
-                temperature=0.3,
-                max_output_tokens=800,  # Aumentado de 512
+                temperature=0.2,  # Más determinista
+                max_output_tokens=1024,  # Aumentado aún más
             )
         )
         
         text = response.text.strip()
-        print(f"[GEMINI DEBUG] Respuesta cruda completa: {text}")
+        print(f"[GEMINI DEBUG] Respuesta cruda: {repr(text)[:300]}")
         
         # Limpiar markdown
         if "```" in text:
@@ -86,19 +86,40 @@ Recuerda:
                     text = part.replace("json", "").replace("JSON", "").strip()
                     break
         
-        # Limpiar caracteres problemáticos
-        text = text.replace('\n', ' ').replace('\r', '').replace('\t', ' ').strip()
-        # Quitar espacios múltiples
-        text = ' '.join(text.split())
+        # Limpiar TODOS los caracteres problemáticos
+        text = text.replace('\n', ' ')
+        text = text.replace('\r', ' ')
+        text = text.replace('\t', ' ')
+        text = text.replace('\\n', ' ')
+        text = text.replace('\\r', ' ')
+        text = text.replace('\\t', ' ')
         
-        # Buscar el JSON válido dentro del texto
+        # Quitar espacios múltiples
+        import re
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        # Buscar el JSON válido
         start = text.find('{')
         end = text.rfind('}') + 1
         
         if start >= 0 and end > start:
             text = text[start:end]
+        else:
+            raise ValueError("No se encontró JSON válido en la respuesta")
         
-        print(f"[GEMINI DEBUG] JSON limpio: {text}")
+        # PLAN B: Si falta la llave de cierre, agregarla
+        if text.count('{') > text.count('}'):
+            text += '}'
+        
+        # PLAN B: Si tiene comillas sin cerrar, limpiar
+        # Contar comillas dobles
+        if text.count('"') % 2 != 0:
+            # Quitar la última comilla impar
+            last_quote = text.rfind('"')
+            text = text[:last_quote]
+            text += '}'
+        
+        print(f"[GEMINI DEBUG] JSON limpio: {text[:300]}")
         
         # Intentar parsear
         resultado = json.loads(text)
