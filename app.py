@@ -6,16 +6,19 @@ import google.generativeai as genai
 import json
 from functools import lru_cache
 import time
-from datetime import datetime
 import re
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime
 
 app = Flask(__name__)
 
 # --- CONFIGURACIÓN ---
 API_KEY_GEMINI = os.environ.get("API_KEY_GEMINI")
-GOOGLE_APPS_SCRIPT_URL = os.environ.get("GOOGLE_APPS_SCRIPT_URL")  # URL del Apps Script
-GMAIL_USER = os.environ.get("GMAIL_USER")  # Tu email de Gmail
-GMAIL_PASSWORD = os.environ.get("GMAIL_PASSWORD")  # Contraseña de aplicación
+GOOGLE_APPS_SCRIPT_URL = os.environ.get("GOOGLE_APPS_SCRIPT_URL")
+GMAIL_USER = os.environ.get("GMAIL_USER")
+GMAIL_PASSWORD = os.environ.get("GMAIL_PASSWORD")
 EMAIL_DESTINO = "gestor@marcasegura.com.mx"
 
 if API_KEY_GEMINI:
@@ -33,127 +36,107 @@ def normalizar_marca(marca):
 
 @lru_cache(maxsize=100)
 def clasificar_con_gemini(descripcion, tipo_negocio):
-    """
-    Usa Gemini para determinar la clase de Niza según el giro
-    tipo_negocio: 'producto' o 'servicio'
-    """
+    """Usa Gemini para determinar la clase de Niza"""
     if not API_KEY_GEMINI:
         return {
             "clase_principal": "35",
             "clase_nombre": "Servicios comerciales",
             "clases_adicionales": [],
-            "nota": "Configuración de IA pendiente"
+            "nota": "IA no disponible"
         }
     
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
         
-        prompt = f"""Eres un experto en clasificación de marcas según el sistema de Niza de la OMPI.
+        # Prompt ULTRA simplificado
+        prompt = f"""Clasifica según Niza: {descripcion} ({tipo_negocio})
 
-Analiza este negocio:
-- Descripción: {descripcion}
-- Tipo: {tipo_negocio}
+Responde SOLO en este formato exacto (una línea):
+CLASE|NOMBRE|NOTA
 
-Responde ÚNICAMENTE con un objeto JSON válido (sin markdown):
-{{
-  "clase_principal": "XX",
-  "clase_nombre": "Descripción corta de la clase",
-  "clases_adicionales": ["YY", "ZZ"],
-  "nota": "Breve explicación de por qué esta clase"
-}}
+Ejemplo: 43|Restaurantes y cafeterías|Servicios de alimentación
 
-Recuerda:
-- Productos: Clases 1-34
-- Servicios: Clases 35-45
-- Sé específico y preciso"""
+Claves: Bebidas=32, Alimentos=29-30, Restaurantes=43, Ropa=25, Software=9, Comercial=35, IT=42
+Productos=1-34, Servicios=35-45"""
 
         response = model.generate_content(
             prompt,
             generation_config=genai.GenerationConfig(
-                temperature=0.2,  # Más determinista
-                max_output_tokens=1024,  # Aumentado aún más
+                temperature=0.1,
+                max_output_tokens=150,
             )
         )
         
         text = response.text.strip()
-        print(f"[GEMINI DEBUG] Respuesta cruda: {repr(text)[:300]}")
+        print(f"[GEMINI DEBUG] Respuesta: {text}")
         
-        # Limpiar markdown
-        if "```" in text:
-            parts = text.split("```")
-            for part in parts:
-                if '{' in part:
-                    text = part.replace("json", "").replace("JSON", "").strip()
-                    break
+        # Parsear formato simple CLASE|NOMBRE|NOTA
+        if '|' in text:
+            partes = text.split('|')
+            if len(partes) >= 3:
+                clase = partes[0].strip()
+                nombre = partes[1].strip()
+                nota = partes[2].strip()
+                
+                # Extraer solo el número
+                match = re.search(r'\d+', clase)
+                if match:
+                    clase_num = match.group()
+                else:
+                    clase_num = clase
+                
+                resultado = {
+                    "clase_principal": clase_num,
+                    "clase_nombre": nombre,
+                    "clases_adicionales": [],
+                    "nota": nota
+                }
+                
+                print(f"[GEMINI] ✓ Clase: {clase_num} - {nombre}")
+                return resultado
         
-        # Limpiar TODOS los caracteres problemáticos
-        text = text.replace('\n', ' ')
-        text = text.replace('\r', ' ')
-        text = text.replace('\t', ' ')
-        text = text.replace('\\n', ' ')
-        text = text.replace('\\r', ' ')
-        text = text.replace('\\t', ' ')
+        # Intentar extraer número
+        numeros = re.findall(r'\b\d{1,2}\b', text)
+        if numeros:
+            clase_num = numeros[0]
+            resultado = {
+                "clase_principal": clase_num,
+                "clase_nombre": f"Clase {clase_num}",
+                "clases_adicionales": [],
+                "nota": text[:100]
+            }
+            print(f"[GEMINI] ⚠ Clase extraída: {clase_num}")
+            return resultado
         
-        # Quitar espacios múltiples
-        import re
-        text = re.sub(r'\s+', ' ', text).strip()
-        
-        # Buscar el JSON válido
-        start = text.find('{')
-        end = text.rfind('}') + 1
-        
-        if start >= 0 and end > start:
-            text = text[start:end]
-        else:
-            raise ValueError("No se encontró JSON válido en la respuesta")
-        
-        # PLAN B: Si falta la llave de cierre, agregarla
-        if text.count('{') > text.count('}'):
-            text += '}'
-        
-        # PLAN B: Si tiene comillas sin cerrar, limpiar
-        # Contar comillas dobles
-        if text.count('"') % 2 != 0:
-            # Quitar la última comilla impar
-            last_quote = text.rfind('"')
-            text = text[:last_quote]
-            text += '}'
-        
-        print(f"[GEMINI DEBUG] JSON limpio: {text[:300]}")
-        
-        # Intentar parsear
-        resultado = json.loads(text)
-        print(f"[GEMINI] ✓ Clase sugerida: {resultado['clase_principal']}")
-        return resultado
-        print(f"[GEMINI] Clase sugerida: {resultado['clase_principal']} - {resultado['clase_nombre']}")
-        return resultado
+        raise ValueError("No se pudo extraer clase")
         
     except Exception as e:
         print(f"[ERROR GEMINI] {e}")
-        # Fallback según tipo
+        # Fallback inteligente
         if tipo_negocio.lower() == 'producto':
-            return {
-                "clase_principal": "9",
-                "clase_nombre": "Productos tecnológicos y científicos",
-                "clases_adicionales": ["35"],
-                "nota": "Clasificación por defecto para productos"
-            }
+            if any(kw in descripcion.lower() for kw in ['bebida', 'refresco', 'agua', 'jugo']):
+                return {"clase_principal": "32", "clase_nombre": "Bebidas", "clases_adicionales": [], "nota": "Clasificación automática"}
+            elif any(kw in descripcion.lower() for kw in ['comida', 'alimento', 'snack']):
+                return {"clase_principal": "29", "clase_nombre": "Alimentos", "clases_adicionales": [], "nota": "Clasificación automática"}
+            elif any(kw in descripcion.lower() for kw in ['ropa', 'vestido', 'calzado']):
+                return {"clase_principal": "25", "clase_nombre": "Ropa y calzado", "clases_adicionales": [], "nota": "Clasificación automática"}
+            elif any(kw in descripcion.lower() for kw in ['software', 'app', 'programa', 'tecnolog']):
+                return {"clase_principal": "9", "clase_nombre": "Software y tecnología", "clases_adicionales": [], "nota": "Clasificación automática"}
+            else:
+                return {"clase_principal": "1", "clase_nombre": "Productos varios", "clases_adicionales": [], "nota": "Clasificación por defecto"}
         else:
-            return {
-                "clase_principal": "35",
-                "clase_nombre": "Servicios comerciales y publicidad",
-                "clases_adicionales": ["42"],
-                "nota": "Clasificación por defecto para servicios"
-            }
+            if any(kw in descripcion.lower() for kw in ['restaurante', 'cafetería', 'bar', 'comida', 'café']):
+                return {"clase_principal": "43", "clase_nombre": "Servicios de restauración", "clases_adicionales": [], "nota": "Clasificación automática"}
+            elif any(kw in descripcion.lower() for kw in ['software', 'desarrollo', 'tecnolog', 'it', 'sistemas']):
+                return {"clase_principal": "42", "clase_nombre": "Servicios tecnológicos", "clases_adicionales": [], "nota": "Clasificación automática"}
+            else:
+                return {"clase_principal": "35", "clase_nombre": "Servicios comerciales", "clases_adicionales": [], "nota": "Clasificación por defecto"}
 
 def buscar_impi_simple(marca):
-    """
-    Búsqueda SIMPLE por denominación en el IMPI
-    Versión mejorada - acepta que si encuentra ALGO es mejor decir "requiere análisis"
-    """
+    """Búsqueda SIMPLE por denominación en el IMPI"""
     session = requests.Session()
     session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'es-MX,es;q=0.9',
         'Referer': 'https://acervomarcas.impi.gob.mx:8181/marcanet/'
@@ -163,7 +146,6 @@ def buscar_impi_simple(marca):
         marca_norm = normalizar_marca(marca)
         print(f"\n[IMPI SIMPLE] Buscando: '{marca_norm}'")
         
-        # Probamos múltiples variantes de la marca
         variantes = [
             marca_norm,
             marca_norm.replace(' ', '-'),
@@ -174,9 +156,7 @@ def buscar_impi_simple(marca):
             try:
                 print(f"[IMPI] Probando variante: '{variante}'")
                 
-                # URL de búsqueda
                 url_base = "https://acervomarcas.impi.gob.mx:8181/marcanet/vistas/common/datos/bsqDenominacionCompleto.pgi"
-                
                 response = session.get(url_base, timeout=20)
                 
                 if response.status_code != 200:
@@ -184,76 +164,82 @@ def buscar_impi_simple(marca):
                 
                 time.sleep(1)
                 
-                # Intentar POST
                 data = {'denominacion': variante}
                 response = session.post(url_base, data=data, timeout=25)
                 
                 texto = response.text.lower()
-                
-                # Analizamos más cuidadosamente
                 soup = BeautifulSoup(response.text, 'html.parser')
                 
-                # Buscar tablas (si hay tabla, hay resultados)
-                tablas = soup.find_all('table')
-                if tablas and len(tablas) > 0:
-                    # Verificar que la tabla tenga contenido real
-                    for tabla in tablas:
-                        filas = tabla.find_all('tr')
-                        if len(filas) > 1:  # Más de solo encabezado
-                            print(f"[IMPI] ✗ Tabla con resultados encontrada")
-                            return "REQUIERE_ANALISIS"
-                
-                # Buscar keywords más específicos
-                keywords_encontrada = [
-                    'expediente',
-                    'solicitud',
-                    'registro',
-                    'titular',
-                    'vigente',
-                    'en trámite'
-                ]
-                
-                if any(kw in texto for kw in keywords_encontrada):
-                    print(f"[IMPI] ✗ Keywords de registro encontrados")
-                    return "REQUIERE_ANALISIS"
-                
-                # Mensajes explícitos de "sin resultados"
+                # PRIMERO: Verificar mensajes explícitos de "sin resultados"
                 sin_resultados = [
                     'no se encontraron registros',
                     'sin resultados',
                     '0 resultados',
-                    'búsqueda sin resultados'
+                    'búsqueda sin resultados',
+                    'no se encontró ningún registro'
                 ]
                 
                 if any(msg in texto for msg in sin_resultados):
                     print(f"[IMPI] ✓ Sin resultados para '{variante}'")
-                    continue  # Probar siguiente variante
+                    continue
+                
+                # SEGUNDO: Buscar keywords MUY específicos de registro
+                keywords_registro = [
+                    'número de expediente',
+                    'número de registro',
+                    'fecha de presentación',
+                    'fecha de registro',
+                    'nombre del titular',
+                    'mx/',
+                    'vigente hasta'
+                ]
+                
+                keywords_encontrados = sum(1 for kw in keywords_registro if kw in texto)
+                
+                if keywords_encontrados >= 2:
+                    print(f"[IMPI] ✗ Keywords específicos encontrados ({keywords_encontrados})")
+                    return "REQUIERE_ANALISIS"
+                
+                # TERCERO: Buscar tablas con datos REALES
+                tablas = soup.find_all('table')
+                if tablas and len(tablas) > 0:
+                    for tabla in tablas:
+                        filas = tabla.find_all('tr')
+                        
+                        if len(filas) < 3:
+                            continue
+                        
+                        tiene_expedientes = False
+                        for fila in filas[1:]:
+                            texto_fila = fila.get_text().lower()
+                            if 'mx/' in texto_fila or re.search(r'\d{6,}', texto_fila):
+                                tiene_expedientes = True
+                                break
+                        
+                        if tiene_expedientes:
+                            print(f"[IMPI] ✗ Tabla con expedientes encontrada")
+                            return "REQUIERE_ANALISIS"
                 
             except Exception as e:
                 print(f"[IMPI] Error con variante '{variante}': {e}")
                 continue
         
-        # Si llegamos aquí, no encontramos nada en ninguna variante
-        print(f"[IMPI] ✓ No se encontraron coincidencias en ninguna variante")
+        print(f"[IMPI] ✓ No se encontraron coincidencias")
         return "POSIBLEMENTE_DISPONIBLE"
         
     except Exception as e:
         print(f"[IMPI] Error general: {e}")
-        return "REQUIERE_ANALISIS"  # Ante duda, mejor pedir análisis
+        return "REQUIERE_ANALISIS"
 
 def guardar_lead_google_sheets(datos_lead):
-    """Guarda el lead en Google Sheets mediante Apps Script"""
-    # URL del Google Apps Script (se configura como variable de entorno)
-    APPS_SCRIPT_URL = os.environ.get("GOOGLE_APPS_SCRIPT_URL")
-    
-    if not APPS_SCRIPT_URL:
+    """Guarda el lead en Google Sheets"""
+    if not GOOGLE_APPS_SCRIPT_URL:
         print("⚠ Google Apps Script URL no configurada")
         return False
     
     try:
-        # Enviar datos al Apps Script
         response = requests.post(
-            APPS_SCRIPT_URL,
+            GOOGLE_APPS_SCRIPT_URL,
             json=datos_lead,
             timeout=10
         )
@@ -270,17 +256,12 @@ def guardar_lead_google_sheets(datos_lead):
         return False
 
 def enviar_email_lead(datos_lead):
-    """Envía email con los datos del lead usando Gmail SMTP"""
+    """Envía email con Gmail SMTP"""
     if not GMAIL_USER or not GMAIL_PASSWORD:
         print("⚠ Gmail SMTP no configurado")
         return False
     
     try:
-        import smtplib
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
-        
-        # Preparar email HTML
         html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -330,77 +311,36 @@ def enviar_email_lead(datos_lead):
                 </table>
                 
                 <div style="background: #fff; padding: 20px; margin-top: 20px; border-radius: 10px; border-left: 4px solid #667eea;">
-                    <p style="margin: 0; color: #4a5568;"><strong>Mensaje mostrado al cliente:</strong></p>
+                    <p style="margin: 0; color: #4a5568;"><strong>Mensaje mostrado:</strong></p>
                     <p style="margin: 10px 0 0 0; color: #2d3748;">{datos_lead['resultado']}</p>
                 </div>
                 
-                <div style="margin-top: 30px; padding: 20px; background: #e6fffa; border-radius: 10px; border-left: 4px solid #38b2ac;">
-                    <p style="margin: 0; color: #234e52;"><strong>📞 Acciones sugeridas:</strong></p>
-                    <ul style="margin: 10px 0 0 0; padding-left: 20px; color: #234e52;">
-                        <li>Contactar al cliente dentro de las próximas 24 horas</li>
-                        <li>Preparar análisis técnico completo de la marca</li>
-                        <li>Revisar antecedentes en IMPI manualmente</li>
-                    </ul>
-                </div>
-                
                 <p style="color: #718096; font-size: 12px; margin-top: 30px; text-align: center;">
-                    📅 {datos_lead['fecha']} a las {datos_lead['hora']}<br>
-                    Enviado desde Consultor de Marcas | MarcaSegura
+                    📅 {datos_lead['fecha']} - {datos_lead['hora']}<br>
+                    Consultor de Marcas | MarcaSegura
                 </p>
             </div>
         </body>
         </html>
         """
         
-        # Versión texto plano (fallback)
-        texto_plano = f"""
-NUEVO LEAD CAPTURADO
-
-DATOS DEL CLIENTE:
-- Nombre: {datos_lead['nombre']}
-- Email: {datos_lead['email']}
-- Teléfono: {datos_lead['telefono']}
-
-CONSULTA:
-- Marca: {datos_lead['marca']}
-- Tipo de negocio: {datos_lead['tipo_negocio']}
-- Status IMPI: {datos_lead['status_impi']}
-
-MENSAJE MOSTRADO:
-{datos_lead['resultado']}
-
-Fecha: {datos_lead['fecha']} {datos_lead['hora']}
-        """
-        
-        # Crear mensaje
         mensaje = MIMEMultipart('alternative')
         mensaje['Subject'] = f"🎯 Nuevo Lead - {datos_lead['nombre']} | Marca: {datos_lead['marca']}"
         mensaje['From'] = GMAIL_USER
         mensaje['To'] = EMAIL_DESTINO
         
-        # Adjuntar ambas versiones
-        parte_texto = MIMEText(texto_plano, 'plain', 'utf-8')
         parte_html = MIMEText(html_content, 'html', 'utf-8')
-        
-        mensaje.attach(parte_texto)
         mensaje.attach(parte_html)
         
-        # Conectar a Gmail SMTP
-        print(f"[EMAIL] Conectando a Gmail SMTP...")
         servidor = smtplib.SMTP('smtp.gmail.com', 587)
         servidor.starttls()
         servidor.login(GMAIL_USER, GMAIL_PASSWORD)
-        
-        # Enviar
         servidor.send_message(mensaje)
         servidor.quit()
         
-        print(f"[EMAIL] ✓ Email enviado correctamente a {EMAIL_DESTINO}")
+        print(f"[EMAIL] ✓ Email enviado a {EMAIL_DESTINO}")
         return True
         
-    except smtplib.SMTPAuthenticationError:
-        print(f"[EMAIL] ✗ Error de autenticación - Verifica usuario y contraseña de aplicación")
-        return False
     except Exception as e:
         print(f"[EMAIL] ✗ Error: {e}")
         return False
@@ -411,10 +351,7 @@ def home():
 
 @app.route('/analizar', methods=['POST'])
 def analizar():
-    """
-    Endpoint principal - VERSIÓN PÚBLICA
-    Usa búsqueda simple del IMPI + Gemini
-    """
+    """Endpoint principal - VERSIÓN PÚBLICA"""
     data = request.json
     marca = data.get('marca', '').strip()
     descripcion = data.get('descripcion', '').strip()
@@ -432,21 +369,27 @@ def analizar():
     # 1. Clasificar con Gemini
     clasificacion = clasificar_con_gemini(descripcion, tipo_negocio)
     
-    # 2. Búsqueda simple en IMPI (solo denominación exacta)
+    # 2. Búsqueda simple en IMPI
     status_impi = buscar_impi_simple(marca)
     
-    # 3. Preparar respuesta según resultado
+    # 3. Preparar respuesta
     if status_impi == "POSIBLEMENTE_DISPONIBLE":
-        mensaje = f"Preliminar: No encontramos coincidencias exactas de '{marca}' en nuestra búsqueda básica del IMPI."
-        icono = "🔍"
+        mensaje = f"¡Buenas noticias! No encontramos coincidencias exactas de '{marca}' en nuestra búsqueda preliminar."
+        icono = "✓"
         color = "success"
-        cta = "Sin embargo, esto NO garantiza disponibilidad. Se requiere un análisis fonético y fonográfico completo por un especialista. Déjanos tus datos para realizar el estudio técnico profesional que incluye búsqueda en todas las variantes y clases."
+        cta = "Sin embargo, esto NO garantiza disponibilidad total. Se requiere un análisis fonético y fonográfico completo por un especialista para verificar todas las variantes posibles. Déjanos tus datos para realizar el estudio técnico profesional."
         
-    else:  # REQUIERE_ANALISIS o ERROR
-        mensaje = f"La marca '{marca}' requiere análisis técnico profesional detallado."
+    elif status_impi == "REQUIERE_ANALISIS":
+        mensaje = f"Tu marca '{marca}' o una parecida parece estar registrada."
         icono = "⚠️"
         color = "warning"
-        cta = "Nuestra búsqueda preliminar indica posibles conflictos o no pudo completarse. Para verificar similitudes fonéticas, gráficas y en todas las clases relevantes, déjanos tus datos. Te contactaremos dentro de 24 horas con un reporte completo."
+        cta = "Agenda una consulta con nuestro ejecutivo para analizar alternativas disponibles y encontrar el nombre perfecto para tu negocio. Déjanos tus datos y te contactaremos dentro de 24 horas."
+        
+    else:
+        mensaje = f"No pudimos completar la búsqueda de '{marca}' en este momento."
+        icono = "🔍"
+        color = "info"
+        cta = "Por favor intenta nuevamente o déjanos tus datos para realizar la búsqueda manualmente y contactarte con los resultados en menos de 24 horas."
     
     resultado = {
         "mensaje": mensaje,
@@ -468,12 +411,9 @@ def analizar():
 
 @app.route('/capturar-lead', methods=['POST'])
 def capturar_lead():
-    """
-    Endpoint para capturar el lead después de mostrar el resultado
-    """
+    """Captura el lead"""
     data = request.json
     
-    # Datos del formulario
     datos_lead = {
         'fecha': datetime.now().strftime('%Y-%m-%d'),
         'hora': datetime.now().strftime('%H:%M:%S'),
@@ -486,43 +426,24 @@ def capturar_lead():
         'status_impi': data.get('status_impi', '')
     }
     
-    # Validar datos obligatorios
     if not all([datos_lead['nombre'], datos_lead['email'], datos_lead['telefono']]):
         return jsonify({"error": "Todos los campos son obligatorios"}), 400
     
     print(f"\n[LEAD CAPTURADO] {datos_lead['nombre']} - {datos_lead['marca']}")
     
-    # Guardar en Google Sheets
-    sheets_ok = guardar_lead_google_sheets(datos_lead)
+    guardar_lead_google_sheets(datos_lead)
+    enviar_email_lead(datos_lead)
     
-    # Enviar email
-    email_ok = enviar_email_lead(datos_lead)
-    
-    # Link de Google Calendar
-    calendar_link = generar_link_google_calendar(datos_lead['nombre'], datos_lead['marca'])
+    from urllib.parse import quote
+    titulo = f"Consulta de Marca - {datos_lead['nombre']}"
+    desc = f"Análisis para la marca: {datos_lead['marca']}"
+    calendar_link = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={quote(titulo)}&details={quote(desc)}"
     
     return jsonify({
         "success": True,
         "mensaje": "¡Gracias! Hemos recibido tu información.",
         "calendar_link": calendar_link
     })
-
-def generar_link_google_calendar(nombre, marca):
-    """Genera link para agregar cita a Google Calendar"""
-    # Formato: https://calendar.google.com/calendar/render?action=TEMPLATE&text=...
-    
-    titulo = f"Consulta de Marca - {nombre}"
-    descripcion = f"Análisis y estrategia de registro para la marca: {marca}"
-    
-    # Codificar para URL
-    from urllib.parse import quote
-    titulo_encoded = quote(titulo)
-    desc_encoded = quote(descripcion)
-    
-    # Link básico (el usuario elige fecha/hora)
-    link = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={titulo_encoded}&details={desc_encoded}"
-    
-    return link
 
 @app.route('/health')
 def health():
