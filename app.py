@@ -76,6 +76,7 @@ Recuerda:
         )
         
         text = response.text.strip()
+        print(f"[GEMINI DEBUG] Respuesta cruda: {text[:200]}")
         
         # Limpiar markdown
         if "```" in text:
@@ -84,6 +85,18 @@ Recuerda:
                 if '{' in part:
                     text = part.replace("json", "").replace("JSON", "").strip()
                     break
+        
+        # Limpiar caracteres problemáticos
+        text = text.replace('\n', ' ').replace('\r', '').strip()
+        
+        # Buscar el JSON válido dentro del texto
+        start = text.find('{')
+        end = text.rfind('}') + 1
+        
+        if start >= 0 and end > start:
+            text = text[start:end]
+        
+        print(f"[GEMINI DEBUG] JSON limpio: {text[:200]}")
         
         resultado = json.loads(text)
         print(f"[GEMINI] Clase sugerida: {resultado['clase_principal']} - {resultado['clase_nombre']}")
@@ -107,10 +120,10 @@ Recuerda:
                 "nota": "Clasificación por defecto para servicios"
             }
 
-def buscar_impi_fonetico(marca, clase_niza):
+def buscar_impi_simple(marca):
     """
-    Búsqueda FONÉTICA en el IMPI
-    Retorna: (status, cantidad_resultados, detalles)
+    Búsqueda SIMPLE por denominación en el IMPI (más confiable)
+    Para la versión pública - búsqueda básica
     """
     session = requests.Session()
     session.headers.update({
@@ -122,85 +135,60 @@ def buscar_impi_fonetico(marca, clase_niza):
     
     try:
         marca_norm = normalizar_marca(marca)
-        print(f"\n[IMPI FONÉTICO] Buscando: '{marca_norm}' en Clase {clase_niza}")
+        print(f"\n[IMPI SIMPLE] Buscando: '{marca_norm}'")
         
-        # URL de búsqueda fonética
-        url_fonetica = "https://acervomarcas.impi.gob.mx:8181/marcanet/vistas/common/datos/bsqFoneticaCompleta.pgi"
+        # URL de búsqueda por denominación (más confiable)
+        url_base = "https://acervomarcas.impi.gob.mx:8181/marcanet/vistas/common/datos/bsqDenominacionCompleto.pgi"
         
-        # Obtener la página
-        response = session.get(url_fonetica, timeout=20)
+        response = session.get(url_base, timeout=20)
         
         if response.status_code != 200:
             print(f"[IMPI] Error HTTP: {response.status_code}")
-            return ("ERROR_CONEXION", 0, None)
+            return "ERROR_CONEXION"
         
-        print(f"[IMPI] Página cargada correctamente")
+        print(f"[IMPI] Página cargada")
         time.sleep(1)
         
-        # Preparar datos para búsqueda fonética
-        # Nota: Los parámetros exactos pueden variar - hay que verificar el formulario real
+        # Preparar búsqueda
         data = {
             'denominacion': marca_norm,
-            'clase': clase_niza,
-            'tipo_busqueda': 'FONÉTICA',  # O el parámetro que use el IMPI
-            'vigentes': 'true'
+            'tipo_busqueda': 'EXACTA'
         }
         
-        # Enviar búsqueda
-        url_busqueda = "https://acervomarcas.impi.gob.mx:8181/marcanet/controlers/ctBusquedaFonetica.php"
-        response = session.post(url_busqueda, data=data, timeout=30)
+        # Intentar POST
+        response = session.post(url_base, data=data, timeout=25)
         
-        print(f"[IMPI] Respuesta recibida: {response.status_code}")
+        print(f"[IMPI] Respuesta: {response.status_code}")
         
-        # Analizar resultados
-        soup = BeautifulSoup(response.text, 'html.parser')
+        # Analizar
         texto = response.text.lower()
         
-        # Buscar tablas de resultados
-        tablas = soup.find_all('table')
-        
-        # Buscar indicadores
         sin_resultados = [
-            "no se encontraron",
+            "no se encontraron registros",
             "sin resultados",
-            "0 resultados",
-            "búsqueda sin resultados"
+            "0 resultados"
         ]
         
         con_resultados = [
             "expediente",
             "solicitud",
-            "registro",
-            "titular"
+            "registro"
         ]
         
         if any(ind in texto for ind in sin_resultados):
-            print(f"[IMPI] ✓ Sin resultados - Marca disponible")
-            return ("DISPONIBLE", 0, None)
-        
-        if tablas and len(tablas) > 0:
-            # Contar filas (cada fila es un resultado)
-            filas = 0
-            for tabla in tablas:
-                rows = tabla.find_all('tr')
-                filas += len(rows) - 1  # -1 para quitar encabezado
-            
-            print(f"[IMPI] ✗ Encontrados {filas} resultados similares")
-            return ("SIMILARES_ENCONTRADAS", filas, None)
+            print(f"[IMPI] ✓ No hay coincidencias exactas")
+            return "POSIBLEMENTE_DISPONIBLE"
         
         if any(ind in texto for ind in con_resultados):
-            print(f"[IMPI] ✗ Marcas similares encontradas")
-            return ("SIMILARES_ENCONTRADAS", 1, None)
+            print(f"[IMPI] ✗ Marca encontrada o similar")
+            return "REQUIERE_ANALISIS"
         
-        print(f"[IMPI] ? Resultado incierto")
-        return ("VERIFICAR_MANUAL", 0, None)
+        print(f"[IMPI] ? No se pudo determinar")
+        return "REQUIERE_ANALISIS"
         
-    except requests.Timeout:
-        print("[IMPI] Timeout")
-        return ("ERROR_TIMEOUT", 0, None)
     except Exception as e:
         print(f"[IMPI] Error: {e}")
-        return ("ERROR_CONEXION", 0, None)
+        return "ERROR_CONEXION"
 
 def guardar_lead_google_sheets(datos_lead):
     """Guarda el lead en Google Sheets mediante Apps Script"""
@@ -373,8 +361,8 @@ def home():
 @app.route('/analizar', methods=['POST'])
 def analizar():
     """
-    Endpoint principal: Analiza la marca y retorna resultado simplificado
-    NO captura el lead aquí, solo analiza
+    Endpoint principal: Analiza la marca con IA
+    Ya NO intenta buscar en IMPI automáticamente (no es confiable)
     """
     data = request.json
     marca = data.get('marca', '').strip()
@@ -390,33 +378,15 @@ def analizar():
     print(f"Tipo: {tipo_negocio}")
     print(f"{'='*70}")
     
-    # 1. Clasificar con Gemini
+    # Clasificar con Gemini
     clasificacion = clasificar_con_gemini(descripcion, tipo_negocio)
     
-    # 2. Buscar en IMPI (fonético)
-    status_impi, cantidad, detalles = buscar_impi_fonetico(marca, clasificacion['clase_principal'])
-    
-    # 3. Preparar respuesta SIMPLIFICADA para el público
-    if status_impi == "SIMILARES_ENCONTRADAS":
-        mensaje = f"Se encontraron marcas similares a '{marca}' registradas en el IMPI."
-        icono = "⚠️"
-        color = "warning"
-        mostrar_formulario = True
-        cta = "Déjanos tus datos para proponerte una estrategia de registro"
-        
-    elif status_impi == "DISPONIBLE":
-        mensaje = f"¡Buenas noticias! La marca '{marca}' parece estar disponible."
-        icono = "✓"
-        color = "success"
-        mostrar_formulario = True
-        cta = "Déjanos tus datos para realizar el análisis técnico completo y proceder con el registro"
-        
-    else:  # ERROR o VERIFICAR_MANUAL
-        mensaje = f"Necesitamos verificar manualmente la disponibilidad de '{marca}'."
-        icono = "🔍"
-        color = "info"
-        mostrar_formulario = True
-        cta = "Déjanos tus datos para realizar una búsqueda exhaustiva"
+    # Preparar respuesta PROFESIONAL Y HONESTA
+    mensaje = f"Hemos analizado '{marca}' y determinado la clasificación adecuada para tu tipo de negocio."
+    icono = "✓"
+    color = "info"
+    mostrar_formulario = True
+    cta = f"Para verificar la disponibilidad real de esta marca en el IMPI y proceder con el registro, déjanos tus datos. Realizaremos un análisis técnico completo y te contactaremos dentro de 24 horas."
     
     resultado = {
         "mensaje": mensaje,
@@ -424,13 +394,14 @@ def analizar():
         "color": color,
         "clase_sugerida": f"Clase {clasificacion['clase_principal']}: {clasificacion['clase_nombre']}",
         "clases_adicionales": clasificacion.get('clases_adicionales', []),
+        "nota_tecnica": clasificacion.get('nota', ''),
         "mostrar_formulario": mostrar_formulario,
         "cta": cta,
-        "status_impi": status_impi,  # Para uso interno
+        "status_impi": "REQUIERE_ANALISIS",  # Siempre requiere análisis profesional
         "tipo_negocio": tipo_negocio
     }
     
-    print(f"[RESULTADO] {status_impi} - Clase {clasificacion['clase_principal']}")
+    print(f"[RESULTADO] Clase {clasificacion['clase_principal']} sugerida")
     print(f"{'='*70}\n")
     
     return jsonify(resultado)
