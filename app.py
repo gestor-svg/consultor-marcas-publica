@@ -71,12 +71,12 @@ Recuerda:
             prompt,
             generation_config=genai.GenerationConfig(
                 temperature=0.3,
-                max_output_tokens=512,
+                max_output_tokens=800,  # Aumentado de 512
             )
         )
         
         text = response.text.strip()
-        print(f"[GEMINI DEBUG] Respuesta cruda: {text[:200]}")
+        print(f"[GEMINI DEBUG] Respuesta cruda completa: {text}")
         
         # Limpiar markdown
         if "```" in text:
@@ -87,7 +87,9 @@ Recuerda:
                     break
         
         # Limpiar caracteres problemáticos
-        text = text.replace('\n', ' ').replace('\r', '').strip()
+        text = text.replace('\n', ' ').replace('\r', '').replace('\t', ' ').strip()
+        # Quitar espacios múltiples
+        text = ' '.join(text.split())
         
         # Buscar el JSON válido dentro del texto
         start = text.find('{')
@@ -96,9 +98,12 @@ Recuerda:
         if start >= 0 and end > start:
             text = text[start:end]
         
-        print(f"[GEMINI DEBUG] JSON limpio: {text[:200]}")
+        print(f"[GEMINI DEBUG] JSON limpio: {text}")
         
+        # Intentar parsear
         resultado = json.loads(text)
+        print(f"[GEMINI] ✓ Clase sugerida: {resultado['clase_principal']}")
+        return resultado
         print(f"[GEMINI] Clase sugerida: {resultado['clase_principal']} - {resultado['clase_nombre']}")
         return resultado
         
