@@ -122,8 +122,8 @@ Recuerda:
 
 def buscar_impi_simple(marca):
     """
-    Búsqueda SIMPLE por denominación en el IMPI (más confiable)
-    Para la versión pública - búsqueda básica
+    Búsqueda SIMPLE por denominación en el IMPI
+    Versión mejorada - acepta que si encuentra ALGO es mejor decir "requiere análisis"
     """
     session = requests.Session()
     session.headers.update({
@@ -137,58 +137,83 @@ def buscar_impi_simple(marca):
         marca_norm = normalizar_marca(marca)
         print(f"\n[IMPI SIMPLE] Buscando: '{marca_norm}'")
         
-        # URL de búsqueda por denominación (más confiable)
-        url_base = "https://acervomarcas.impi.gob.mx:8181/marcanet/vistas/common/datos/bsqDenominacionCompleto.pgi"
-        
-        response = session.get(url_base, timeout=20)
-        
-        if response.status_code != 200:
-            print(f"[IMPI] Error HTTP: {response.status_code}")
-            return "ERROR_CONEXION"
-        
-        print(f"[IMPI] Página cargada")
-        time.sleep(1)
-        
-        # Preparar búsqueda
-        data = {
-            'denominacion': marca_norm,
-            'tipo_busqueda': 'EXACTA'
-        }
-        
-        # Intentar POST
-        response = session.post(url_base, data=data, timeout=25)
-        
-        print(f"[IMPI] Respuesta: {response.status_code}")
-        
-        # Analizar
-        texto = response.text.lower()
-        
-        sin_resultados = [
-            "no se encontraron registros",
-            "sin resultados",
-            "0 resultados"
+        # Probamos múltiples variantes de la marca
+        variantes = [
+            marca_norm,
+            marca_norm.replace(' ', '-'),
+            marca_norm.replace(' ', ''),
         ]
         
-        con_resultados = [
-            "expediente",
-            "solicitud",
-            "registro"
-        ]
+        for variante in variantes:
+            try:
+                print(f"[IMPI] Probando variante: '{variante}'")
+                
+                # URL de búsqueda
+                url_base = "https://acervomarcas.impi.gob.mx:8181/marcanet/vistas/common/datos/bsqDenominacionCompleto.pgi"
+                
+                response = session.get(url_base, timeout=20)
+                
+                if response.status_code != 200:
+                    continue
+                
+                time.sleep(1)
+                
+                # Intentar POST
+                data = {'denominacion': variante}
+                response = session.post(url_base, data=data, timeout=25)
+                
+                texto = response.text.lower()
+                
+                # Analizamos más cuidadosamente
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                # Buscar tablas (si hay tabla, hay resultados)
+                tablas = soup.find_all('table')
+                if tablas and len(tablas) > 0:
+                    # Verificar que la tabla tenga contenido real
+                    for tabla in tablas:
+                        filas = tabla.find_all('tr')
+                        if len(filas) > 1:  # Más de solo encabezado
+                            print(f"[IMPI] ✗ Tabla con resultados encontrada")
+                            return "REQUIERE_ANALISIS"
+                
+                # Buscar keywords más específicos
+                keywords_encontrada = [
+                    'expediente',
+                    'solicitud',
+                    'registro',
+                    'titular',
+                    'vigente',
+                    'en trámite'
+                ]
+                
+                if any(kw in texto for kw in keywords_encontrada):
+                    print(f"[IMPI] ✗ Keywords de registro encontrados")
+                    return "REQUIERE_ANALISIS"
+                
+                # Mensajes explícitos de "sin resultados"
+                sin_resultados = [
+                    'no se encontraron registros',
+                    'sin resultados',
+                    '0 resultados',
+                    'búsqueda sin resultados'
+                ]
+                
+                if any(msg in texto for msg in sin_resultados):
+                    print(f"[IMPI] ✓ Sin resultados para '{variante}'")
+                    continue  # Probar siguiente variante
+                
+            except Exception as e:
+                print(f"[IMPI] Error con variante '{variante}': {e}")
+                continue
         
-        if any(ind in texto for ind in sin_resultados):
-            print(f"[IMPI] ✓ No hay coincidencias exactas")
-            return "POSIBLEMENTE_DISPONIBLE"
-        
-        if any(ind in texto for ind in con_resultados):
-            print(f"[IMPI] ✗ Marca encontrada o similar")
-            return "REQUIERE_ANALISIS"
-        
-        print(f"[IMPI] ? No se pudo determinar")
-        return "REQUIERE_ANALISIS"
+        # Si llegamos aquí, no encontramos nada en ninguna variante
+        print(f"[IMPI] ✓ No se encontraron coincidencias en ninguna variante")
+        return "POSIBLEMENTE_DISPONIBLE"
         
     except Exception as e:
-        print(f"[IMPI] Error: {e}")
-        return "ERROR_CONEXION"
+        print(f"[IMPI] Error general: {e}")
+        return "REQUIERE_ANALISIS"  # Ante duda, mejor pedir análisis
 
 def guardar_lead_google_sheets(datos_lead):
     """Guarda el lead en Google Sheets mediante Apps Script"""
@@ -386,16 +411,16 @@ def analizar():
     
     # 3. Preparar respuesta según resultado
     if status_impi == "POSIBLEMENTE_DISPONIBLE":
-        mensaje = f"Buenas noticias: No encontramos coincidencias exactas de '{marca}' en el IMPI."
-        icono = "✓"
+        mensaje = f"Preliminar: No encontramos coincidencias exactas de '{marca}' en nuestra búsqueda básica del IMPI."
+        icono = "🔍"
         color = "success"
-        cta = "Sin embargo, se requiere un análisis fonético completo para garantizar la disponibilidad. Déjanos tus datos para realizar el estudio técnico profesional."
+        cta = "Sin embargo, esto NO garantiza disponibilidad. Se requiere un análisis fonético y fonográfico completo por un especialista. Déjanos tus datos para realizar el estudio técnico profesional que incluye búsqueda en todas las variantes y clases."
         
     else:  # REQUIERE_ANALISIS o ERROR
-        mensaje = f"La marca '{marca}' requiere un análisis técnico profesional."
-        icono = "🔍"
-        color = "info"
-        cta = "Para verificar similitudes fonéticas, gráficas y en todas las clases relevantes, déjanos tus datos. Te contactaremos dentro de 24 horas con un reporte completo."
+        mensaje = f"La marca '{marca}' requiere análisis técnico profesional detallado."
+        icono = "⚠️"
+        color = "warning"
+        cta = "Nuestra búsqueda preliminar indica posibles conflictos o no pudo completarse. Para verificar similitudes fonéticas, gráficas y en todas las clases relevantes, déjanos tus datos. Te contactaremos dentro de 24 horas con un reporte completo."
     
     resultado = {
         "mensaje": mensaje,
