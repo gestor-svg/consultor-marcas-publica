@@ -139,6 +139,29 @@ def generar_mensaje_whatsapp(datos_lead, datos_facturacion=None):
     return mensaje
 
 
+def generar_whatsapp_lead_nuevo(datos_lead):
+    """Genera mensaje de WhatsApp para lead nuevo (sin pago aún)"""
+    mensaje = f"""🆕 *NUEVO LEAD CAPTURADO*
+
+📋 *Datos:*
+• Nombre: {datos_lead.get('nombre', 'N/A')}
+• Email: {datos_lead.get('email', 'N/A')}
+• Teléfono: {datos_lead.get('telefono', 'N/A')}
+
+🏷️ *Consulta:*
+• Marca: {datos_lead.get('marca', 'N/A')}
+• Tipo: {datos_lead.get('tipo_negocio', 'N/A')}
+• Clase: {datos_lead.get('clase_sugerida', 'N/A')}
+• Status: {datos_lead.get('status_impi', 'N/A')}
+
+📅 {datetime.now().strftime('%Y-%m-%d %H:%M')}
+⏳ Pendiente de pago
+
+💡 Seguimiento recomendado en 24-48 hrs si no compra.
+"""
+    return f"https://wa.me/{WHATSAPP_NUMERO}?text={quote(mensaje)}"
+
+
 @lru_cache(maxsize=100)
 def clasificar_con_gemini(descripcion, tipo_negocio):
     """Usa Gemini para determinar la clase de Niza"""
@@ -470,6 +493,9 @@ def capturar_lead():
     except:
         print("[EMAIL] ⚠ No se pudo iniciar thread de email")
     
+    # Generar link de WhatsApp para notificación de nuevo lead
+    whatsapp_link_lead = generar_whatsapp_lead_nuevo(datos_lead)
+    
     # Responder éxito si Sheets funcionó (el email es secundario)
     return jsonify({
         "success": True,
@@ -488,6 +514,7 @@ def capturar_lead():
             ],
             "link_pago": MERCADO_PAGO_LINK,
         },
+        "whatsapp_notificacion": whatsapp_link_lead,
     })
 
 
