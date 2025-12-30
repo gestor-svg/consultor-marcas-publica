@@ -21,6 +21,9 @@ GMAIL_USER = os.environ.get("GMAIL_USER")
 GMAIL_PASSWORD = os.environ.get("GMAIL_PASSWORD")
 EMAIL_DESTINO = "gestor@marcasegura.com.mx"
 
+# DEBUG MODE - Cambiar a False en producción
+DEBUG_IMPI = True
+
 if API_KEY_GEMINI:
     genai.configure(api_key=API_KEY_GEMINI)
     print("✓ Gemini configurado")
@@ -28,9 +31,9 @@ else:
     print("⚠ API_KEY_GEMINI no encontrada")
 
 def normalizar_marca(marca):
-    """Normaliza el nombre de la marca"""
-    marca = marca.upper().strip()
-    marca = re.sub(r'[^\w\s\-]', '', marca)
+    """Normaliza el nombre de la marca para búsqueda"""
+    marca = marca.strip()
+    # No convertir a mayúsculas - el IMPI maneja ambos
     marca = re.sub(r'\s+', ' ', marca)
     return marca
 
@@ -48,7 +51,6 @@ def clasificar_con_gemini(descripcion, tipo_negocio):
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
         
-        # Prompt ULTRA simplificado
         prompt = f"""Clasifica según Niza: {descripcion} ({tipo_negocio})
 
 Responde SOLO en este formato exacto (una línea):
@@ -70,7 +72,6 @@ Productos=1-34, Servicios=35-45"""
         text = response.text.strip()
         print(f"[GEMINI DEBUG] Respuesta: {text}")
         
-        # Parsear formato simple CLASE|NOMBRE|NOTA
         if '|' in text:
             partes = text.split('|')
             if len(partes) >= 3:
@@ -78,35 +79,27 @@ Productos=1-34, Servicios=35-45"""
                 nombre = partes[1].strip()
                 nota = partes[2].strip()
                 
-                # Extraer solo el número
                 match = re.search(r'\d+', clase)
-                if match:
-                    clase_num = match.group()
-                else:
-                    clase_num = clase
+                clase_num = match.group() if match else clase
                 
-                resultado = {
+                print(f"[GEMINI] ✓ Clase: {clase_num} - {nombre}")
+                return {
                     "clase_principal": clase_num,
                     "clase_nombre": nombre,
                     "clases_adicionales": [],
                     "nota": nota
                 }
-                
-                print(f"[GEMINI] ✓ Clase: {clase_num} - {nombre}")
-                return resultado
         
-        # Intentar extraer número
         numeros = re.findall(r'\b\d{1,2}\b', text)
         if numeros:
             clase_num = numeros[0]
-            resultado = {
+            print(f"[GEMINI] ⚠ Clase extraída: {clase_num}")
+            return {
                 "clase_principal": clase_num,
                 "clase_nombre": f"Clase {clase_num}",
                 "clases_adicionales": [],
                 "nota": text[:100]
             }
-            print(f"[GEMINI] ⚠ Clase extraída: {clase_num}")
-            return resultado
         
         raise ValueError("No se pudo extraer clase")
         
@@ -122,114 +115,234 @@ Productos=1-34, Servicios=35-45"""
                 return {"clase_principal": "25", "clase_nombre": "Ropa y calzado", "clases_adicionales": [], "nota": "Clasificación automática"}
             elif any(kw in descripcion.lower() for kw in ['software', 'app', 'programa', 'tecnolog']):
                 return {"clase_principal": "9", "clase_nombre": "Software y tecnología", "clases_adicionales": [], "nota": "Clasificación automática"}
-            else:
-                return {"clase_principal": "1", "clase_nombre": "Productos varios", "clases_adicionales": [], "nota": "Clasificación por defecto"}
+            return {"clase_principal": "1", "clase_nombre": "Productos varios", "clases_adicionales": [], "nota": "Clasificación por defecto"}
         else:
             if any(kw in descripcion.lower() for kw in ['restaurante', 'cafetería', 'bar', 'comida', 'café']):
                 return {"clase_principal": "43", "clase_nombre": "Servicios de restauración", "clases_adicionales": [], "nota": "Clasificación automática"}
             elif any(kw in descripcion.lower() for kw in ['software', 'desarrollo', 'tecnolog', 'it', 'sistemas']):
                 return {"clase_principal": "42", "clase_nombre": "Servicios tecnológicos", "clases_adicionales": [], "nota": "Clasificación automática"}
-            else:
-                return {"clase_principal": "35", "clase_nombre": "Servicios comerciales", "clases_adicionales": [], "nota": "Clasificación por defecto"}
+            return {"clase_principal": "35", "clase_nombre": "Servicios comerciales", "clases_adicionales": [], "nota": "Clasificación por defecto"}
+
 
 def buscar_impi_simple(marca):
-    """Búsqueda SIMPLE por denominación en el IMPI"""
+    """
+    Búsqueda en IMPI usando JSF/PrimeFaces AJAX
+    Basada en el análisis del formulario real de MARCANET
+    """
     session = requests.Session()
     session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'es-MX,es;q=0.9',
-        'Referer': 'https://acervomarcas.impi.gob.mx:8181/marcanet/'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'es-MX,es;q=0.9,en;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
     })
     
+    marca_buscar = normalizar_marca(marca)
+    
+    print(f"\n{'='*60}")
+    print(f"[IMPI] Buscando marca: '{marca_buscar}'")
+    print(f"{'='*60}")
+    
     try:
-        marca_norm = normalizar_marca(marca)
-        print(f"\n[IMPI SIMPLE] Buscando: '{marca_norm}'")
+        # ============================================
+        # PASO 1: Obtener página inicial y ViewState
+        # ============================================
+        print(f"[PASO 1] Obteniendo página inicial y ViewState...")
         
-        variantes = [
-            marca_norm,
-            marca_norm.replace(' ', '-'),
-            marca_norm.replace(' ', ''),
+        url_base = "https://acervomarcas.impi.gob.mx:8181/marcanet/"
+        
+        response_inicial = session.get(url_base, timeout=30, verify=True)
+        
+        if response_inicial.status_code != 200:
+            print(f"[IMPI] ✗ Error al cargar página: {response_inicial.status_code}")
+            return "ERROR_CONEXION"
+        
+        print(f"  Status: {response_inicial.status_code}")
+        print(f"  Cookies: {dict(session.cookies)}")
+        
+        # Extraer ViewState (token JSF obligatorio)
+        soup_inicial = BeautifulSoup(response_inicial.text, 'html.parser')
+        viewstate_input = soup_inicial.find('input', {'name': 'javax.faces.ViewState'})
+        
+        if not viewstate_input:
+            print(f"[IMPI] ✗ No se encontró ViewState")
+            return "ERROR_CONEXION"
+        
+        viewstate = viewstate_input.get('value', '')
+        print(f"  ViewState: {viewstate[:50]}...")
+        
+        if DEBUG_IMPI:
+            with open('/tmp/impi_01_inicial.html', 'w', encoding='utf-8') as f:
+                f.write(response_inicial.text)
+        
+        # ============================================
+        # PASO 2: Enviar búsqueda AJAX (PrimeFaces)
+        # ============================================
+        print(f"\n[PASO 2] Enviando búsqueda AJAX...")
+        
+        url_busqueda = "https://acervomarcas.impi.gob.mx:8181/marcanet/vistas/common/home.pgi"
+        
+        # Datos para petición AJAX de PrimeFaces
+        data_busqueda = {
+            'javax.faces.partial.ajax': 'true',
+            'javax.faces.source': 'frmBsqDen:busquedaIdButton',
+            'javax.faces.partial.execute': 'frmBsqDen:busquedaIdButton frmBsqDen:denominacionId frmBsqDen:swtExacto',
+            'javax.faces.partial.render': 'frmBsqDen',
+            'frmBsqDen:busquedaIdButton': 'frmBsqDen:busquedaIdButton',
+            'frmBsqDen': 'frmBsqDen',
+            'frmBsqDen:denominacionId': marca_buscar,
+            'javax.faces.ViewState': viewstate,
+        }
+        
+        headers_ajax = {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'Faces-Request': 'partial/ajax',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Origin': 'https://acervomarcas.impi.gob.mx:8181',
+            'Referer': url_base,
+        }
+        
+        print(f"  URL: {url_busqueda}")
+        print(f"  Marca: {marca_buscar}")
+        
+        response_busqueda = session.post(
+            url_busqueda,
+            data=data_busqueda,
+            headers=headers_ajax,
+            timeout=30
+        )
+        
+        print(f"  Status: {response_busqueda.status_code}")
+        print(f"  Response length: {len(response_busqueda.text)} bytes")
+        
+        if DEBUG_IMPI:
+            with open('/tmp/impi_02_busqueda.xml', 'w', encoding='utf-8') as f:
+                f.write(response_busqueda.text)
+        
+        if response_busqueda.status_code != 200:
+            print(f"[IMPI] ✗ Error en búsqueda: {response_busqueda.status_code}")
+            return "ERROR_CONEXION"
+        
+        # ============================================
+        # PASO 3: Analizar respuesta AJAX
+        # ============================================
+        print(f"\n[PASO 3] Analizando respuesta...")
+        
+        respuesta_texto = response_busqueda.text
+        
+        # La respuesta AJAX de PrimeFaces viene en formato XML con CDATA
+        # Buscar el contenido HTML dentro del CDATA
+        
+        # Parsear como XML para extraer el HTML
+        soup_resp = BeautifulSoup(respuesta_texto, 'html.parser')
+        
+        # También buscar directamente en el texto
+        texto_lower = respuesta_texto.lower()
+        
+        # ============================================
+        # DETECCIÓN DE RESULTADOS
+        # ============================================
+        
+        # Método 1: Buscar "Total de registros"
+        match_total = re.search(r'total de registros\s*=\s*(\d+)', texto_lower)
+        if match_total:
+            total_registros = int(match_total.group(1))
+            print(f"  ✓ Total de registros encontrado: {total_registros}")
+            
+            if total_registros > 0:
+                print(f"\n[IMPI] ✗ MARCA ENCONTRADA - {total_registros} registros")
+                return "REQUIERE_ANALISIS"
+        
+        # Método 2: Buscar tabla de resultados con datos
+        if 'frmBsqDen:resultadoExpediente_data' in respuesta_texto:
+            print(f"  ✓ Tabla de resultados detectada")
+            
+            # Buscar filas de datos (ui-datatable-even o ui-datatable-odd)
+            filas_data = re.findall(r'ui-datatable-(even|odd)', respuesta_texto)
+            if filas_data:
+                num_filas = len(filas_data)
+                print(f"  ✓ Filas de datos encontradas: {num_filas}")
+                
+                if num_filas > 0:
+                    print(f"\n[IMPI] ✗ MARCA ENCONTRADA - {num_filas} filas")
+                    return "REQUIERE_ANALISIS"
+        
+        # Método 3: Buscar indicadores específicos de registros
+        indicadores_registro = [
+            'registro de marca',
+            'nominativa',
+            'mixta',
+            'innominada',
+            'tridimensional'
         ]
         
-        for variante in variantes:
-            try:
-                print(f"[IMPI] Probando variante: '{variante}'")
-                
-                url_base = "https://acervomarcas.impi.gob.mx:8181/marcanet/vistas/common/datos/bsqDenominacionCompleto.pgi"
-                response = session.get(url_base, timeout=20)
-                
-                if response.status_code != 200:
-                    continue
-                
-                time.sleep(1)
-                
-                data = {'denominacion': variante}
-                response = session.post(url_base, data=data, timeout=25)
-                
-                texto = response.text.lower()
-                soup = BeautifulSoup(response.text, 'html.parser')
-                
-                # PRIMERO: Verificar mensajes explícitos de "sin resultados"
-                sin_resultados = [
-                    'no se encontraron registros',
-                    'sin resultados',
-                    '0 resultados',
-                    'búsqueda sin resultados',
-                    'no se encontró ningún registro'
-                ]
-                
-                if any(msg in texto for msg in sin_resultados):
-                    print(f"[IMPI] ✓ Sin resultados para '{variante}'")
-                    continue
-                
-                # SEGUNDO: Buscar keywords MUY específicos de registro
-                keywords_registro = [
-                    'número de expediente',
-                    'número de registro',
-                    'fecha de presentación',
-                    'fecha de registro',
-                    'nombre del titular',
-                    'mx/',
-                    'vigente hasta'
-                ]
-                
-                keywords_encontrados = sum(1 for kw in keywords_registro if kw in texto)
-                
-                if keywords_encontrados >= 2:
-                    print(f"[IMPI] ✗ Keywords específicos encontrados ({keywords_encontrados})")
-                    return "REQUIERE_ANALISIS"
-                
-                # TERCERO: Buscar tablas con datos REALES
-                tablas = soup.find_all('table')
-                if tablas and len(tablas) > 0:
-                    for tabla in tablas:
-                        filas = tabla.find_all('tr')
-                        
-                        if len(filas) < 3:
-                            continue
-                        
-                        tiene_expedientes = False
-                        for fila in filas[1:]:
-                            texto_fila = fila.get_text().lower()
-                            if 'mx/' in texto_fila or re.search(r'\d{6,}', texto_fila):
-                                tiene_expedientes = True
-                                break
-                        
-                        if tiene_expedientes:
-                            print(f"[IMPI] ✗ Tabla con expedientes encontrada")
-                            return "REQUIERE_ANALISIS"
-                
-            except Exception as e:
-                print(f"[IMPI] Error con variante '{variante}': {e}")
-                continue
+        indicadores_encontrados = sum(1 for ind in indicadores_registro if ind in texto_lower)
         
-        print(f"[IMPI] ✓ No se encontraron coincidencias")
-        return "POSIBLEMENTE_DISPONIBLE"
+        if indicadores_encontrados >= 2:
+            print(f"  ✓ Indicadores de registro: {indicadores_encontrados}")
+            
+            # Verificar que la marca buscada aparece en los resultados
+            if marca_buscar.lower() in texto_lower:
+                print(f"  ✓ Marca '{marca_buscar}' encontrada en resultados")
+                print(f"\n[IMPI] ✗ MARCA ENCONTRADA")
+                return "REQUIERE_ANALISIS"
         
+        # Método 4: Buscar expedientes (números de 5-6 dígitos en contexto de resultados)
+        if 'expediente' in texto_lower:
+            expedientes = re.findall(r'>(\d{5,6})</a>', respuesta_texto)
+            if expedientes:
+                print(f"  ✓ Expedientes encontrados: {expedientes[:5]}...")
+                print(f"\n[IMPI] ✗ MARCA ENCONTRADA - {len(expedientes)} expedientes")
+                return "REQUIERE_ANALISIS"
+        
+        # Método 5: Verificar si la tabla está vacía
+        # Si hay tabla pero sin filas de datos
+        if 'resultadoExpediente' in respuesta_texto:
+            if 'ui-datatable-empty-message' in respuesta_texto or 'No se encontraron' in respuesta_texto:
+                print(f"  ✓ Tabla vacía - Sin resultados")
+                print(f"\n[IMPI] ✓ MARCA POSIBLEMENTE DISPONIBLE")
+                return "POSIBLEMENTE_DISPONIBLE"
+        
+        # Método 6: Si no hay tabla de resultados en absoluto
+        if 'resultadoExpediente' not in respuesta_texto and 'pnlResultados' in respuesta_texto:
+            # La tabla de resultados existe pero está vacía
+            tabla_vacia = '<tr><td></td></tr>' in respuesta_texto or 'pnlResultados"><tbody><tr><td></td></tr>' in respuesta_texto.replace('\n', '').replace(' ', '')
+            if tabla_vacia:
+                print(f"  ✓ Panel de resultados vacío")
+                print(f"\n[IMPI] ✓ MARCA POSIBLEMENTE DISPONIBLE")
+                return "POSIBLEMENTE_DISPONIBLE"
+        
+        # ============================================
+        # Si llegamos aquí, no pudimos determinar con certeza
+        # ============================================
+        print(f"\n[IMPI] ⚠ No se pudo determinar con certeza")
+        print(f"  Respuesta contiene 'resultadoExpediente': {'resultadoExpediente' in respuesta_texto}")
+        print(f"  Respuesta contiene 'registro de marca': {'registro de marca' in texto_lower}")
+        print(f"  Respuesta contiene marca '{marca_buscar}': {marca_buscar.lower() in texto_lower}")
+        
+        # Por seguridad, si no podemos confirmar que está vacío, asumimos que requiere análisis
+        if len(respuesta_texto) > 5000:  # Respuesta grande probablemente tiene resultados
+            print(f"  Respuesta grande ({len(respuesta_texto)} bytes) - probablemente tiene resultados")
+            return "REQUIERE_ANALISIS"
+        
+        return "REQUIERE_ANALISIS"  # Conservador por defecto
+        
+    except requests.exceptions.SSLError as e:
+        print(f"[IMPI] Error SSL: {e}")
+        return "ERROR_CONEXION"
+    except requests.exceptions.Timeout as e:
+        print(f"[IMPI] Timeout: {e}")
+        return "ERROR_CONEXION"
+    except requests.exceptions.ConnectionError as e:
+        print(f"[IMPI] Error de conexión: {e}")
+        return "ERROR_CONEXION"
     except Exception as e:
         print(f"[IMPI] Error general: {e}")
-        return "REQUIERE_ANALISIS"
+        import traceback
+        traceback.print_exc()
+        return "ERROR_CONEXION"
+
 
 def guardar_lead_google_sheets(datos_lead):
     """Guarda el lead en Google Sheets"""
@@ -254,6 +367,7 @@ def guardar_lead_google_sheets(datos_lead):
     except Exception as e:
         print(f"[SHEETS] ✗ Error: {e}")
         return False
+
 
 def enviar_email_lead(datos_lead):
     """Envía email con Gmail SMTP"""
@@ -345,13 +459,19 @@ def enviar_email_lead(datos_lead):
         print(f"[EMAIL] ✗ Error: {e}")
         return False
 
+
+# ============================================
+# RUTAS FLASK
+# ============================================
+
 @app.route('/')
 def home():
     return render_template('index.html')
 
+
 @app.route('/analizar', methods=['POST'])
 def analizar():
-    """Endpoint principal - VERSIÓN PÚBLICA"""
+    """Endpoint principal de análisis"""
     data = request.json
     marca = data.get('marca', '').strip()
     descripcion = data.get('descripcion', '').strip()
@@ -363,16 +483,17 @@ def analizar():
     print(f"\n{'='*70}")
     print(f"ANÁLISIS DE MARCA - Versión Pública")
     print(f"Marca: {marca}")
+    print(f"Descripción: {descripcion[:50]}...")
     print(f"Tipo: {tipo_negocio}")
     print(f"{'='*70}")
     
     # 1. Clasificar con Gemini
     clasificacion = clasificar_con_gemini(descripcion, tipo_negocio)
     
-    # 2. Búsqueda simple en IMPI
+    # 2. Búsqueda en IMPI
     status_impi = buscar_impi_simple(marca)
     
-    # 3. Preparar respuesta
+    # 3. Preparar respuesta según resultado
     if status_impi == "POSIBLEMENTE_DISPONIBLE":
         mensaje = f"¡Buenas noticias! No encontramos coincidencias exactas de '{marca}' en nuestra búsqueda preliminar."
         icono = "✓"
@@ -380,16 +501,22 @@ def analizar():
         cta = "Sin embargo, esto NO garantiza disponibilidad total. Se requiere un análisis fonético y fonográfico completo por un especialista para verificar todas las variantes posibles. Déjanos tus datos para realizar el estudio técnico profesional."
         
     elif status_impi == "REQUIERE_ANALISIS":
-        mensaje = f"Tu marca '{marca}' o una parecida parece estar registrada."
+        mensaje = f"Encontramos registros relacionados con '{marca}' en la base de datos del IMPI."
         icono = "⚠️"
         color = "warning"
-        cta = "Agenda una consulta con nuestro ejecutivo para analizar alternativas disponibles y encontrar el nombre perfecto para tu negocio. Déjanos tus datos y te contactaremos dentro de 24 horas."
+        cta = "Tu marca o una similar ya podría estar registrada. Agenda una consulta con nuestro ejecutivo para analizar alternativas disponibles y encontrar el nombre perfecto para tu negocio. Déjanos tus datos y te contactaremos dentro de 24 horas."
+    
+    elif status_impi == "ERROR_CONEXION":
+        mensaje = f"No pudimos conectar con el servidor del IMPI en este momento."
+        icono = "🔄"
+        color = "info"
+        cta = "Por favor intenta nuevamente en unos minutos o déjanos tus datos para realizar la búsqueda manualmente y contactarte con los resultados."
         
     else:
-        mensaje = f"No pudimos completar la búsqueda de '{marca}' en este momento."
+        mensaje = f"No pudimos completar la búsqueda de '{marca}'."
         icono = "🔍"
         color = "info"
-        cta = "Por favor intenta nuevamente o déjanos tus datos para realizar la búsqueda manualmente y contactarte con los resultados en menos de 24 horas."
+        cta = "Déjanos tus datos para realizar la búsqueda manualmente y contactarte con los resultados en menos de 24 horas."
     
     resultado = {
         "mensaje": mensaje,
@@ -404,14 +531,16 @@ def analizar():
         "tipo_negocio": tipo_negocio
     }
     
-    print(f"[RESULTADO] Status: {status_impi}, Clase: {clasificacion['clase_principal']}")
+    print(f"\n[RESULTADO FINAL] Status: {status_impi}")
+    print(f"[RESULTADO FINAL] Clase: {clasificacion['clase_principal']}")
     print(f"{'='*70}\n")
     
     return jsonify(resultado)
 
+
 @app.route('/capturar-lead', methods=['POST'])
 def capturar_lead():
-    """Captura el lead"""
+    """Captura el lead y envía notificaciones"""
     data = request.json
     
     datos_lead = {
@@ -431,9 +560,11 @@ def capturar_lead():
     
     print(f"\n[LEAD CAPTURADO] {datos_lead['nombre']} - {datos_lead['marca']}")
     
+    # Guardar en Google Sheets y enviar email
     guardar_lead_google_sheets(datos_lead)
     enviar_email_lead(datos_lead)
     
+    # Generar link de calendario
     from urllib.parse import quote
     titulo = f"Consulta de Marca - {datos_lead['nombre']}"
     desc = f"Análisis para la marca: {datos_lead['marca']}"
@@ -445,24 +576,111 @@ def capturar_lead():
         "calendar_link": calendar_link
     })
 
+
+# ============================================
+# ENDPOINTS DE DEBUG
+# ============================================
+
+@app.route('/debug/test/<marca>')
+def debug_test(marca):
+    """Endpoint para probar búsqueda directamente"""
+    resultado = buscar_impi_simple(marca)
+    
+    # Intentar leer archivos de debug
+    debug_files = {}
+    for filename in ['impi_01_inicial.html', 'impi_02_busqueda.xml']:
+        try:
+            with open(f'/tmp/{filename}', 'r', encoding='utf-8') as f:
+                content = f.read()
+                debug_files[filename] = {
+                    'size': len(content),
+                    'preview': content[:500] + '...' if len(content) > 500 else content
+                }
+        except:
+            pass
+    
+    return jsonify({
+        "marca": marca,
+        "resultado": resultado,
+        "debug_files": debug_files
+    })
+
+
+@app.route('/debug/files')
+def debug_files():
+    """Lista archivos de debug"""
+    import os
+    files = []
+    try:
+        for f in os.listdir('/tmp'):
+            if f.startswith('impi_'):
+                filepath = f'/tmp/{f}'
+                files.append({
+                    'name': f,
+                    'size': os.path.getsize(filepath),
+                    'modified': datetime.fromtimestamp(os.path.getmtime(filepath)).isoformat()
+                })
+    except:
+        pass
+    return jsonify({"files": files})
+
+
+@app.route('/debug/file/<filename>')
+def debug_file(filename):
+    """Ver contenido de archivo de debug"""
+    from flask import Response
+    
+    if not filename.startswith('impi_'):
+        return jsonify({"error": "Archivo no válido"}), 400
+    
+    try:
+        with open(f'/tmp/{filename}', 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        if filename.endswith('.json'):
+            return jsonify(json.loads(content))
+        elif filename.endswith('.xml'):
+            return Response(content, mimetype='application/xml')
+        else:
+            return Response(content, mimetype='text/html')
+    except FileNotFoundError:
+        return jsonify({"error": "Archivo no encontrado"}), 404
+
+
 @app.route('/health')
 def health():
     return jsonify({
         "status": "ok",
-        "version": "publica-1.0",
+        "version": "publica-2.0-jsf",
+        "debug_mode": DEBUG_IMPI,
         "gemini": bool(API_KEY_GEMINI),
         "sheets": bool(GOOGLE_APPS_SCRIPT_URL),
-        "email": bool(GMAIL_USER and GMAIL_PASSWORD)
+        "email": bool(GMAIL_USER and GMAIL_PASSWORD),
+        "timestamp": datetime.now().isoformat()
     })
+
+
+# ============================================
+# MAIN
+# ============================================
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
     print(f"\n{'='*70}")
-    print(f"🌐 CONSULTOR DE MARCAS - VERSIÓN PÚBLICA")
+    print(f"🌐 CONSULTOR DE MARCAS - VERSIÓN PÚBLICA v2.0")
     print(f"{'='*70}")
     print(f"Puerto: {port}")
+    print(f"Debug IMPI: {'✓ ACTIVADO' if DEBUG_IMPI else '✗ Desactivado'}")
     print(f"Gemini: {'✓' if API_KEY_GEMINI else '✗'}")
     print(f"Google Sheets: {'✓' if GOOGLE_APPS_SCRIPT_URL else '✗'}")
     print(f"Gmail SMTP: {'✓' if (GMAIL_USER and GMAIL_PASSWORD) else '✗'}")
+    print(f"{'='*70}")
+    print(f"Endpoints:")
+    print(f"  GET  /                    - Página principal")
+    print(f"  POST /analizar            - Analizar marca")
+    print(f"  POST /capturar-lead       - Capturar lead")
+    print(f"  GET  /debug/test/<marca>  - Probar búsqueda")
+    print(f"  GET  /debug/files         - Listar archivos debug")
+    print(f"  GET  /health              - Health check")
     print(f"{'='*70}\n")
     app.run(host='0.0.0.0', port=port, debug=False)
