@@ -1,3 +1,6 @@
+Index · HTML
+Copiar
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -540,8 +543,8 @@
             document.getElementById('ctaText').textContent = data.cta;
 
             // Reset estados
-            document.getElementById('formLead').style.display = 'block';
-            document.getElementById('formLead').reset();
+            document.getElementById('formLead').querySelector('form').style.display = 'block';
+            document.getElementById('formLead').querySelector('form').reset();
             document.getElementById('successMessage').classList.remove('active');
             document.getElementById('ofertaSection').classList.remove('active');
 
