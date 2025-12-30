@@ -1,6 +1,3 @@
-Index · HTML
-Copiar
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -423,7 +420,7 @@ Copiar
             <p class="cta-text" id="ctaText"></p>
 
             <!-- Formulario de captura de lead -->
-            <div class="lead-form" id="leadForm">
+            <div class="lead-form" id="leadFormContainer">
                 <h3>📋 Déjanos tus datos</h3>
                 
                 <div class="success-message" id="successMessage">
@@ -542,9 +539,10 @@ Copiar
             `;
             document.getElementById('ctaText').textContent = data.cta;
 
-            // Reset estados
-            document.getElementById('formLead').querySelector('form').style.display = 'block';
-            document.getElementById('formLead').querySelector('form').reset();
+            // Reset estados - CORREGIDO: usar IDs correctos
+            document.getElementById('leadFormContainer').style.display = 'block';
+            document.getElementById('formLead').reset();
+            document.getElementById('formLead').style.display = 'block';
             document.getElementById('successMessage').classList.remove('active');
             document.getElementById('ofertaSection').classList.remove('active');
 
@@ -590,8 +588,8 @@ Copiar
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    // Ocultar formulario y mostrar mensaje de éxito
-                    document.getElementById('formLead').querySelector('form').style.display = 'none';
+                    // CORREGIDO: Ocultar el formulario correctamente
+                    document.getElementById('formLead').style.display = 'none';
                     document.getElementById('successMessage').classList.add('active');
                     
                     // Mostrar oferta de pago
