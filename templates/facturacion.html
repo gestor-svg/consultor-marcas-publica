@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Datos de Facturación | MarcaSegura</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            max-width: 500px;
+            width: 100%;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            padding: 30px;
+            text-align: center;
+            color: white;
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 0.95rem;
+        }
+        
+        .success-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+        }
+        
+        .form-container {
+            padding: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #374151;
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .radio-group {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+        
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        
+        .radio-option input[type="radio"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        
+        .factura-fields {
+            display: none;
+            background: #f9fafb;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+        
+        .factura-fields.show {
+            display: block;
+        }
+        
+        .factura-fields .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .factura-fields .form-group:last-child {
+            margin-bottom: 0;
+        }
+        
+        .btn-submit {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-submit:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .info-box {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            border-radius: 0 10px 10px 0;
+            margin-bottom: 20px;
+        }
+        
+        .info-box p {
+            color: #92400e;
+            font-size: 0.9rem;
+        }
+        
+        .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ffffff;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading .spinner {
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="success-badge">✓ Pago Confirmado</div>
+            <h1>¡Gracias por tu compra!</h1>
+            <p>Solo necesitamos algunos datos adicionales</p>
+        </div>
+        
+        <div class="form-container">
+            <div class="info-box">
+                <p>📧 Tu reporte será enviado al correo que proporciones en las próximas 24-48 horas.</p>
+            </div>
+            
+            <form id="formFacturacion">
+                <input type="hidden" id="telefono" name="telefono" value="{{ telefono }}">
+                
+                <div class="form-group">
+                    <label for="email">Correo electrónico *</label>
+                    <input type="email" id="email" name="email" required placeholder="tu@email.com">
+                </div>
+                
+                <div class="form-group">
+                    <label for="confirmar_telefono">Confirma tu teléfono *</label>
+                    <input type="tel" id="confirmar_telefono" name="confirmar_telefono" required 
+                           value="{{ telefono }}" placeholder="10 dígitos">
+                </div>
+                
+                <div class="form-group">
+                    <label>¿Requieres factura?</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="requiere_factura" value="No" checked onchange="toggleFactura()">
+                            <span>No</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="requiere_factura" value="Si" onchange="toggleFactura()">
+                            <span>Sí</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="factura-fields" id="facturaFields">
+                    <div class="form-group">
+                        <label for="rfc">RFC *</label>
+                        <input type="text" id="rfc" name="rfc" placeholder="XAXX010101000" 
+                               pattern="[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}" 
+                               style="text-transform: uppercase;">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="razon_social">Razón Social *</label>
+                        <input type="text" id="razon_social" name="razon_social" placeholder="Nombre o empresa">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="regimen_fiscal">Régimen Fiscal *</label>
+                        <select id="regimen_fiscal" name="regimen_fiscal">
+                            <option value="">Selecciona...</option>
+                            <option value="601">601 - General de Ley Personas Morales</option>
+                            <option value="603">603 - Personas Morales con Fines no Lucrativos</option>
+                            <option value="605">605 - Sueldos y Salarios</option>
+                            <option value="606">606 - Arrendamiento</option>
+                            <option value="607">607 - Régimen de Enajenación o Adquisición de Bienes</option>
+                            <option value="608">608 - Demás ingresos</option>
+                            <option value="610">610 - Residentes en el Extranjero</option>
+                            <option value="611">611 - Ingresos por Dividendos</option>
+                            <option value="612">612 - Personas Físicas con Actividades Empresariales</option>
+                            <option value="614">614 - Ingresos por intereses</option>
+                            <option value="615">615 - Régimen de los ingresos por obtención de premios</option>
+                            <option value="616">616 - Sin obligaciones fiscales</option>
+                            <option value="620">620 - Sociedades Cooperativas de Producción</option>
+                            <option value="621">621 - Incorporación Fiscal</option>
+                            <option value="622">622 - Actividades Agrícolas, Ganaderas, Silvícolas y Pesqueras</option>
+                            <option value="623">623 - Opcional para Grupos de Sociedades</option>
+                            <option value="624">624 - Coordinados</option>
+                            <option value="625">625 - Régimen Simplificado de Confianza (RESICO)</option>
+                            <option value="626">626 - RESICO Personas Morales</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="uso_cfdi">Uso de CFDI *</label>
+                        <select id="uso_cfdi" name="uso_cfdi">
+                            <option value="">Selecciona...</option>
+                            <option value="G01">G01 - Adquisición de mercancías</option>
+                            <option value="G02">G02 - Devoluciones, descuentos o bonificaciones</option>
+                            <option value="G03" selected>G03 - Gastos en general</option>
+                            <option value="I01">I01 - Construcciones</option>
+                            <option value="I02">I02 - Mobiliario y equipo de oficina</option>
+                            <option value="I03">I03 - Equipo de transporte</option>
+                            <option value="I04">I04 - Equipo de cómputo</option>
+                            <option value="I08">I08 - Otra maquinaria y equipo</option>
+                            <option value="D01">D01 - Honorarios médicos</option>
+                            <option value="D02">D02 - Gastos médicos por incapacidad</option>
+                            <option value="D03">D03 - Gastos funerales</option>
+                            <option value="D04">D04 - Donativos</option>
+                            <option value="D05">D05 - Intereses por créditos hipotecarios</option>
+                            <option value="D06">D06 - Aportaciones voluntarias al SAR</option>
+                            <option value="D07">D07 - Primas de seguros de gastos médicos</option>
+                            <option value="D08">D08 - Gastos de transportación escolar</option>
+                            <option value="D09">D09 - Depósitos en cuentas de ahorro</option>
+                            <option value="D10">D10 - Pagos por servicios educativos</option>
+                            <option value="S01">S01 - Sin efectos fiscales</option>
+                            <option value="CP01">CP01 - Pagos</option>
+                            <option value="CN01">CN01 - Nómina</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="codigo_postal">Código Postal *</label>
+                        <input type="text" id="codigo_postal" name="codigo_postal" 
+                               placeholder="12345" pattern="[0-9]{5}" maxlength="5">
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn-submit" id="btnSubmit">
+                    <span class="spinner"></span>
+                    <span class="btn-text">Continuar</span>
+                </button>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        function toggleFactura() {
+            const requiereFactura = document.querySelector('input[name="requiere_factura"]:checked').value;
+            const facturaFields = document.getElementById('facturaFields');
+            const inputs = facturaFields.querySelectorAll('input, select');
+            
+            if (requiereFactura === 'Si') {
+                facturaFields.classList.add('show');
+                inputs.forEach(input => {
+                    if (input.id !== 'uso_cfdi') {
+                        input.required = true;
+                    }
+                });
+            } else {
+                facturaFields.classList.remove('show');
+                inputs.forEach(input => input.required = false);
+            }
+        }
+        
+        // Formatear RFC a mayúsculas
+        document.getElementById('rfc').addEventListener('input', function(e) {
+            this.value = this.value.toUpperCase();
+        });
+        
+        // Enviar formulario
+        document.getElementById('formFacturacion').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const btn = document.getElementById('btnSubmit');
+            btn.classList.add('loading');
+            btn.disabled = true;
+            
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData.entries());
+            
+            // Usar el teléfono confirmado
+            data.telefono = data.confirmar_telefono;
+            
+            try {
+                const response = await fetch('/guardar-facturacion', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    window.location.href = result.redirect;
+                } else {
+                    alert(result.error || 'Error al guardar los datos');
+                    btn.classList.remove('loading');
+                    btn.disabled = false;
+                }
+            } catch (error) {
+                alert('Error de conexión. Por favor intenta de nuevo.');
+                btn.classList.remove('loading');
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
