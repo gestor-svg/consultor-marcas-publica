@@ -460,11 +460,17 @@ def capturar_lead():
     print(f"\n[LEAD] {datos_lead['nombre']} - {datos_lead['telefono']}")
     
     session['lead_data'] = datos_lead
-    guardar_en_sheets(datos_lead, hoja="leads")
     
-    # Enviar email en segundo plano para no bloquear
-    threading.Thread(target=enviar_email_lead, args=(datos_lead.copy(),), daemon=True).start()
+    # Guardar en Sheets (esto es lo importante)
+    sheets_ok = guardar_en_sheets(datos_lead, hoja="leads")
     
+    # Intentar enviar email en segundo plano (no bloquea si falla)
+    try:
+        threading.Thread(target=enviar_email_lead, args=(datos_lead.copy(),), daemon=True).start()
+    except:
+        print("[EMAIL] ⚠ No se pudo iniciar thread de email")
+    
+    # Responder éxito si Sheets funcionó (el email es secundario)
     return jsonify({
         "success": True,
         "mensaje": "¡Gracias! Hemos recibido tu información.",
