@@ -174,63 +174,97 @@ def clasificar_con_gemini(descripcion, tipo_negocio):
         }
     
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        # CORREGIDO: Usar modelo correcto gemini-1.5-flash
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
-        prompt = f"""Clasifica según Niza: {descripcion} ({tipo_negocio})
+        prompt = f"""Eres un experto en clasificación de marcas según el sistema de Niza.
 
-Responde SOLO en este formato exacto (una línea):
-CLASE|NOMBRE|NOTA
+Clasifica este negocio: "{descripcion}" (Tipo: {tipo_negocio})
 
-Ejemplo: 43|Restaurantes y cafeterías|Servicios de alimentación
+INSTRUCCIONES:
+- Responde ÚNICAMENTE con el formato: NÚMERO|NOMBRE_CLASE|NOTA_BREVE
+- El NÚMERO debe ser entre 1 y 45
+- No incluyas explicaciones adicionales
 
-Claves: Bebidas=32, Alimentos=29-30, Restaurantes=43, Ropa=25, Software=9, Comercial=35, IT=42
-Productos=1-34, Servicios=35-45"""
+EJEMPLOS DE RESPUESTA CORRECTA:
+43|Restaurantes y cafeterías|Servicios de alimentación
+25|Prendas de vestir|Ropa y calzado
+9|Software y aplicaciones|Tecnología digital
+35|Publicidad y negocios|Servicios comerciales
+
+GUÍA RÁPIDA:
+- Bebidas sin alcohol = 32
+- Bebidas alcohólicas = 33
+- Alimentos procesados = 29
+- Pan, café, dulces = 30
+- Restaurantes/cafeterías = 43
+- Ropa/calzado = 25
+- Software/apps = 9
+- Servicios IT = 42
+- Publicidad/comercio = 35
+
+Responde ahora:"""
 
         response = model.generate_content(
             prompt,
             generation_config=genai.GenerationConfig(
                 temperature=0.1,
-                max_output_tokens=150,
+                max_output_tokens=100,
             )
         )
         
         text = response.text.strip()
         print(f"[GEMINI DEBUG] Respuesta: {text}")
         
+        # Limpiar respuesta de posibles formatos markdown
+        text = text.replace('```', '').strip()
+        
         if '|' in text:
             partes = text.split('|')
-            if len(partes) >= 3:
+            if len(partes) >= 2:
                 clase = partes[0].strip()
-                nombre = partes[1].strip()
-                nota = partes[2].strip()
+                nombre = partes[1].strip() if len(partes) > 1 else ""
+                nota = partes[2].strip() if len(partes) > 2 else nombre
                 
                 match = re.search(r'\d+', clase)
                 clase_num = match.group() if match else clase
                 
+                # Validar que sea un número válido de clase (1-45)
+                try:
+                    clase_int = int(clase_num)
+                    if clase_int < 1 or clase_int > 45:
+                        raise ValueError("Clase fuera de rango")
+                except:
+                    clase_num = "35"  # Default a servicios comerciales
+                    nombre = obtener_nombre_clase("35")
+                
                 print(f"[GEMINI] ✓ Clase: {clase_num} - {nombre}")
                 return {
                     "clase_principal": clase_num,
-                    "clase_nombre": nombre,
+                    "clase_nombre": nombre if nombre else obtener_nombre_clase(clase_num),
                     "clases_adicionales": [],
                     "nota": nota
                 }
         
+        # Fallback: buscar números en la respuesta
         numeros = re.findall(r'\b\d{1,2}\b', text)
         if numeros:
             clase_num = numeros[0]
-            clase_nombre = obtener_nombre_clase(clase_num)
-            print(f"[GEMINI] ⚠ Clase extraída: {clase_num} - {clase_nombre}")
-            return {
-                "clase_principal": clase_num,
-                "clase_nombre": clase_nombre,
-                "clases_adicionales": [],
-                "nota": text[:100]
-            }
+            if 1 <= int(clase_num) <= 45:
+                clase_nombre = obtener_nombre_clase(clase_num)
+                print(f"[GEMINI] ⚠ Clase extraída: {clase_num} - {clase_nombre}")
+                return {
+                    "clase_principal": clase_num,
+                    "clase_nombre": clase_nombre,
+                    "clases_adicionales": [],
+                    "nota": text[:100]
+                }
         
         raise ValueError("No se pudo extraer clase")
         
     except Exception as e:
         print(f"[ERROR GEMINI] {e}")
+        # Clasificación de respaldo basada en palabras clave
         if tipo_negocio.lower() == 'producto':
             if any(kw in descripcion.lower() for kw in ['bebida', 'refresco', 'agua', 'jugo']):
                 return {"clase_principal": "32", "clase_nombre": obtener_nombre_clase("32"), "clases_adicionales": [], "nota": "Clasificación automática"}
@@ -578,7 +612,7 @@ def confirmacion():
 def health():
     return jsonify({
         "status": "ok",
-        "version": "funnel-2.0",
+        "version": "funnel-2.1",
         "precio": PRECIO_REPORTE,
     })
 
@@ -591,7 +625,7 @@ def debug_test(marca):
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
     print(f"\n{'='*70}")
-    print(f"🌐 CONSULTOR DE MARCAS - FUNNEL v2.0")
+    print(f"🌐 CONSULTOR DE MARCAS - FUNNEL v2.1")
     print(f"URL: {APP_BASE_URL}")
     print(f"Precio: ${PRECIO_REPORTE} MXN")
     print(f"{'='*70}\n")
