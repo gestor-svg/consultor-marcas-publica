@@ -462,61 +462,64 @@ def analizar():
 @app.route('/capturar-lead', methods=['POST'])
 def capturar_lead():
     """FORM 1: Captura lead inicial"""
-    data = request.json
-    
-    datos_lead = {
-        'fecha': datetime.now().strftime('%Y-%m-%d'),
-        'hora': datetime.now().strftime('%H:%M:%S'),
-        'nombre': data.get('nombre', ''),
-        'email': data.get('email', ''),
-        'telefono': data.get('telefono', ''),
-        'marca': data.get('marca', ''),
-        'tipo_negocio': data.get('tipo_negocio', ''),
-        'clase_sugerida': data.get('clase_sugerida', ''),
-        'status_impi': data.get('status_impi', ''),
-        'pagado': 'NO',
-    }
-    
-    if not all([datos_lead['nombre'], datos_lead['email'], datos_lead['telefono']]):
-        return jsonify({"error": "Todos los campos son obligatorios"}), 400
-    
-    print(f"\n[LEAD] {datos_lead['nombre']} - {datos_lead['telefono']}")
-    
-    session['lead_data'] = datos_lead
-    
-    # Guardar en Sheets (esto es lo importante)
-    sheets_ok = guardar_en_sheets(datos_lead, hoja="leads")
-    
-    # Email desactivado temporalmente
-    # try:
-    #     threading.Thread(target=enviar_email_lead, args=(datos_lead.copy(),), daemon=True).start()
-    # except:
-    #     print("[EMAIL] ⚠ No se pudo iniciar thread de email")
-    
-    # Generar link de WhatsApp para notificación de nuevo lead
-    whatsapp_link_lead = generar_whatsapp_lead_nuevo(datos_lead)
-    print(f"[WHATSAPP] Link generado: {whatsapp_link_lead[:80]}...")
-    
-    # Responder éxito
-    return jsonify({
-        "success": True,
-        "mensaje": "¡Gracias! Hemos recibido tu información.",
-        "mostrar_oferta": True,
-        "oferta": {
-            "titulo": "🎯 Obtén el Reporte Completo + Asesoría",
-            "precio": PRECIO_REPORTE,
-            "precio_formateado": f"${PRECIO_REPORTE:,} MXN",
-            "beneficios": [
-                "✓ Análisis fonético y fonográfico completo",
-                "✓ Búsqueda exhaustiva de marcas similares",
-                "✓ Reporte PDF profesional",
-                "✓ Asesoría 1-a-1 por Google Meet (30 min)",
-                "✓ Recomendaciones personalizadas"
-            ],
-            "link_pago": MERCADO_PAGO_LINK,
-        },
-        "whatsapp_notificacion": whatsapp_link_lead,
-    })
+    try:
+        data = request.json
+        
+        datos_lead = {
+            'fecha': datetime.now().strftime('%Y-%m-%d'),
+            'hora': datetime.now().strftime('%H:%M:%S'),
+            'nombre': data.get('nombre', ''),
+            'email': data.get('email', ''),
+            'telefono': data.get('telefono', ''),
+            'marca': data.get('marca', ''),
+            'tipo_negocio': data.get('tipo_negocio', ''),
+            'clase_sugerida': data.get('clase_sugerida', ''),
+            'status_impi': data.get('status_impi', ''),
+            'pagado': 'NO',
+        }
+        
+        if not all([datos_lead['nombre'], datos_lead['email'], datos_lead['telefono']]):
+            return jsonify({"success": False, "error": "Todos los campos son obligatorios"}), 400
+        
+        print(f"\n[LEAD] {datos_lead['nombre']} - {datos_lead['telefono']}")
+        
+        # Guardar en Sheets
+        sheets_ok = guardar_en_sheets(datos_lead, hoja="leads")
+        print(f"[SHEETS] Resultado: {sheets_ok}")
+        
+        # Generar link de WhatsApp para notificación
+        whatsapp_link_lead = generar_whatsapp_lead_nuevo(datos_lead)
+        print(f"[WHATSAPP] Link generado OK")
+        
+        # Responder éxito
+        respuesta = {
+            "success": True,
+            "mensaje": "¡Gracias! Hemos recibido tu información.",
+            "mostrar_oferta": True,
+            "oferta": {
+                "titulo": "🎯 Obtén el Reporte Completo + Asesoría",
+                "precio": PRECIO_REPORTE,
+                "precio_formateado": f"${PRECIO_REPORTE:,} MXN",
+                "beneficios": [
+                    "✓ Análisis fonético y fonográfico completo",
+                    "✓ Búsqueda exhaustiva de marcas similares",
+                    "✓ Reporte PDF profesional",
+                    "✓ Asesoría 1-a-1 por Google Meet (30 min)",
+                    "✓ Recomendaciones personalizadas"
+                ],
+                "link_pago": MERCADO_PAGO_LINK,
+            },
+            "whatsapp_notificacion": whatsapp_link_lead,
+        }
+        
+        print(f"[RESPONSE] Enviando respuesta exitosa")
+        return jsonify(respuesta)
+        
+    except Exception as e:
+        print(f"[ERROR] capturar-lead: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route('/facturacion')
