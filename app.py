@@ -24,6 +24,59 @@ EMAIL_DESTINO = "gestor@marcasegura.com.mx"
 # DEBUG MODE - Cambiar a False en producción
 DEBUG_IMPI = True
 
+# Diccionario completo de Clases de Niza (Clasificación Internacional de Marcas)
+CLASES_NIZA = {
+    "1": "Productos químicos",
+    "2": "Pinturas y barnices",
+    "3": "Cosméticos y productos de limpieza",
+    "4": "Lubricantes y combustibles",
+    "5": "Productos farmacéuticos",
+    "6": "Metales comunes y sus aleaciones",
+    "7": "Máquinas y máquinas herramientas",
+    "8": "Herramientas e instrumentos de mano",
+    "9": "Aparatos e instrumentos científicos y electrónicos",
+    "10": "Aparatos e instrumentos médicos",
+    "11": "Aparatos de iluminación, calefacción y cocción",
+    "12": "Vehículos y medios de transporte",
+    "13": "Armas de fuego y pirotecnia",
+    "14": "Joyería y relojería",
+    "15": "Instrumentos musicales",
+    "16": "Papel, cartón y artículos de oficina",
+    "17": "Caucho, plásticos y materiales aislantes",
+    "18": "Cuero, equipaje y artículos de viaje",
+    "19": "Materiales de construcción no metálicos",
+    "20": "Muebles y artículos de madera",
+    "21": "Utensilios de cocina y recipientes",
+    "22": "Cuerdas, lonas y materiales textiles",
+    "23": "Hilos para uso textil",
+    "24": "Tejidos y cubiertas textiles",
+    "25": "Prendas de vestir, calzado y sombreros",
+    "26": "Artículos de mercería y pasamanería",
+    "27": "Alfombras y revestimientos de suelos",
+    "28": "Juegos, juguetes y artículos deportivos",
+    "29": "Carne, pescado, frutas y verduras procesadas",
+    "30": "Café, té, cacao, pan y pastelería",
+    "31": "Productos agrícolas y forestales",
+    "32": "Cervezas, bebidas sin alcohol y aguas",
+    "33": "Bebidas alcohólicas (excepto cervezas)",
+    "34": "Tabaco y artículos para fumadores",
+    "35": "Publicidad y gestión de negocios",
+    "36": "Servicios financieros y de seguros",
+    "37": "Servicios de construcción y reparación",
+    "38": "Servicios de telecomunicaciones",
+    "39": "Servicios de transporte y almacenamiento",
+    "40": "Tratamiento de materiales",
+    "41": "Educación, formación y entretenimiento",
+    "42": "Servicios científicos y tecnológicos",
+    "43": "Servicios de restauración y hospedaje",
+    "44": "Servicios médicos y de belleza",
+    "45": "Servicios jurídicos y de seguridad",
+}
+
+def obtener_nombre_clase(numero_clase):
+    """Obtiene el nombre descriptivo de una clase de Niza"""
+    return CLASES_NIZA.get(str(numero_clase), f"Clase {numero_clase}")
+
 if API_KEY_GEMINI:
     genai.configure(api_key=API_KEY_GEMINI)
     print("✓ Gemini configurado")
@@ -93,10 +146,11 @@ Productos=1-34, Servicios=35-45"""
         numeros = re.findall(r'\b\d{1,2}\b', text)
         if numeros:
             clase_num = numeros[0]
-            print(f"[GEMINI] ⚠ Clase extraída: {clase_num}")
+            clase_nombre = obtener_nombre_clase(clase_num)
+            print(f"[GEMINI] ⚠ Clase extraída: {clase_num} - {clase_nombre}")
             return {
                 "clase_principal": clase_num,
-                "clase_nombre": f"Clase {clase_num}",
+                "clase_nombre": clase_nombre,
                 "clases_adicionales": [],
                 "nota": text[:100]
             }
@@ -105,23 +159,23 @@ Productos=1-34, Servicios=35-45"""
         
     except Exception as e:
         print(f"[ERROR GEMINI] {e}")
-        # Fallback inteligente
+        # Fallback inteligente usando el diccionario de clases
         if tipo_negocio.lower() == 'producto':
             if any(kw in descripcion.lower() for kw in ['bebida', 'refresco', 'agua', 'jugo']):
-                return {"clase_principal": "32", "clase_nombre": "Bebidas", "clases_adicionales": [], "nota": "Clasificación automática"}
+                return {"clase_principal": "32", "clase_nombre": obtener_nombre_clase("32"), "clases_adicionales": [], "nota": "Clasificación automática"}
             elif any(kw in descripcion.lower() for kw in ['comida', 'alimento', 'snack']):
-                return {"clase_principal": "29", "clase_nombre": "Alimentos", "clases_adicionales": [], "nota": "Clasificación automática"}
+                return {"clase_principal": "29", "clase_nombre": obtener_nombre_clase("29"), "clases_adicionales": [], "nota": "Clasificación automática"}
             elif any(kw in descripcion.lower() for kw in ['ropa', 'vestido', 'calzado']):
-                return {"clase_principal": "25", "clase_nombre": "Ropa y calzado", "clases_adicionales": [], "nota": "Clasificación automática"}
+                return {"clase_principal": "25", "clase_nombre": obtener_nombre_clase("25"), "clases_adicionales": [], "nota": "Clasificación automática"}
             elif any(kw in descripcion.lower() for kw in ['software', 'app', 'programa', 'tecnolog']):
-                return {"clase_principal": "9", "clase_nombre": "Software y tecnología", "clases_adicionales": [], "nota": "Clasificación automática"}
-            return {"clase_principal": "1", "clase_nombre": "Productos varios", "clases_adicionales": [], "nota": "Clasificación por defecto"}
+                return {"clase_principal": "9", "clase_nombre": obtener_nombre_clase("9"), "clases_adicionales": [], "nota": "Clasificación automática"}
+            return {"clase_principal": "1", "clase_nombre": obtener_nombre_clase("1"), "clases_adicionales": [], "nota": "Clasificación por defecto"}
         else:
             if any(kw in descripcion.lower() for kw in ['restaurante', 'cafetería', 'bar', 'comida', 'café']):
-                return {"clase_principal": "43", "clase_nombre": "Servicios de restauración", "clases_adicionales": [], "nota": "Clasificación automática"}
+                return {"clase_principal": "43", "clase_nombre": obtener_nombre_clase("43"), "clases_adicionales": [], "nota": "Clasificación automática"}
             elif any(kw in descripcion.lower() for kw in ['software', 'desarrollo', 'tecnolog', 'it', 'sistemas']):
-                return {"clase_principal": "42", "clase_nombre": "Servicios tecnológicos", "clases_adicionales": [], "nota": "Clasificación automática"}
-            return {"clase_principal": "35", "clase_nombre": "Servicios comerciales", "clases_adicionales": [], "nota": "Clasificación por defecto"}
+                return {"clase_principal": "42", "clase_nombre": obtener_nombre_clase("42"), "clases_adicionales": [], "nota": "Clasificación automática"}
+            return {"clase_principal": "35", "clase_nombre": obtener_nombre_clase("35"), "clases_adicionales": [], "nota": "Clasificación por defecto"}
 
 
 def buscar_impi_simple(marca):
