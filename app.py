@@ -13,6 +13,8 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from urllib.parse import quote
 
+import threading
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "marcasegura-secret-key-2025")
 
@@ -25,7 +27,7 @@ EMAIL_DESTINO = "gestor@marcasegura.com.mx"
 
 # CONFIGURACIÓN DE VENTAS
 PRECIO_REPORTE = 950  # MXN
-MERCADO_PAGO_LINK = os.environ.get("MERCADO_PAGO_LINK", "https://link.mercadopago.com.mx/TU_LINK_AQUI")
+MERCADO_PAGO_LINK = os.environ.get("MERCADO_PAGO_LINK", "https://mpago.li/2xfRia")
 WHATSAPP_NUMERO = os.environ.get("WHATSAPP_NUMERO", "523331562224")
 CAL_COM_URL = os.environ.get("CAL_COM_URL", "https://cal.com/marcasegura/30min")
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "https://consultor-marcas-publica.onrender.com")
@@ -342,37 +344,37 @@ def guardar_en_sheets(datos, hoja="leads"):
 
 
 def enviar_email_lead(datos_lead):
-    """Envía email de notificación"""
+    """Envía email de notificación (versión ligera)"""
     if not GMAIL_USER or not GMAIL_PASSWORD:
+        print("[EMAIL] ⚠ No configurado")
         return False
     
     try:
-        html = f"""
-        <html><body style="font-family: Arial; max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #667eea, #764ba2); padding: 30px; text-align: center;">
-                <h1 style="color: white;">🎯 Nuevo Lead</h1>
-            </div>
-            <div style="padding: 30px;">
-                <p><strong>Nombre:</strong> {datos_lead.get('nombre')}</p>
-                <p><strong>Email:</strong> {datos_lead.get('email')}</p>
-                <p><strong>Teléfono:</strong> {datos_lead.get('telefono')}</p>
-                <p><strong>Marca:</strong> {datos_lead.get('marca')}</p>
-                <p><strong>Status:</strong> {datos_lead.get('status_impi')}</p>
-            </div>
-        </body></html>
+        # Usar texto plano en lugar de HTML para reducir memoria
+        texto = f"""
+NUEVO LEAD - CONSULTOR DE MARCAS
+
+Nombre: {datos_lead.get('nombre', 'N/A')}
+Email: {datos_lead.get('email', 'N/A')}
+Teléfono: {datos_lead.get('telefono', 'N/A')}
+
+Marca: {datos_lead.get('marca', 'N/A')}
+Status: {datos_lead.get('status_impi', 'N/A')}
+Clase: {datos_lead.get('clase_sugerida', 'N/A')}
+
+Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M')}
         """
         
-        mensaje = MIMEMultipart('alternative')
-        mensaje['Subject'] = f"🎯 Lead - {datos_lead.get('nombre')} | {datos_lead.get('marca')}"
+        mensaje = MIMEText(texto, 'plain', 'utf-8')
+        mensaje['Subject'] = f"Lead - {datos_lead.get('nombre', 'Cliente')} | {datos_lead.get('marca', 'Marca')}"
         mensaje['From'] = GMAIL_USER
         mensaje['To'] = EMAIL_DESTINO
-        mensaje.attach(MIMEText(html, 'html', 'utf-8'))
         
-        servidor = smtplib.SMTP('smtp.gmail.com', 587)
-        servidor.starttls()
-        servidor.login(GMAIL_USER, GMAIL_PASSWORD)
-        servidor.send_message(mensaje)
-        servidor.quit()
+        with smtplib.SMTP('smtp.gmail.com', 587, timeout=10) as servidor:
+            servidor.starttls()
+            servidor.login(GMAIL_USER, GMAIL_PASSWORD)
+            servidor.send_message(mensaje)
+        
         print(f"[EMAIL] ✓ Enviado")
         return True
     except Exception as e:
@@ -459,7 +461,9 @@ def capturar_lead():
     
     session['lead_data'] = datos_lead
     guardar_en_sheets(datos_lead, hoja="leads")
-    enviar_email_lead(datos_lead)
+    
+    # Enviar email en segundo plano para no bloquear
+    threading.Thread(target=enviar_email_lead, args=(datos_lead.copy(),), daemon=True).start()
     
     return jsonify({
         "success": True,
