@@ -255,14 +255,77 @@
             margin-top: 10px;
         }
 
-        .btn-calendar {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            margin-top: 10px;
+        /* Sección de Oferta */
+        .oferta-section {
             display: none;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            padding: 30px;
+            margin-top: 25px;
+            color: white;
+            text-align: center;
         }
 
-        .btn-calendar.active {
+        .oferta-section.active {
             display: block;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .oferta-precio {
+            font-size: 48px;
+            font-weight: 700;
+            margin: 15px 0;
+        }
+
+        .oferta-precio span {
+            font-size: 18px;
+            opacity: 0.8;
+        }
+
+        .oferta-beneficios {
+            text-align: left;
+            margin: 20px 0;
+            padding: 0 10px;
+        }
+
+        .oferta-beneficios li {
+            list-style: none;
+            padding: 8px 0;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .oferta-beneficios li::before {
+            content: "✓";
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .btn-pagar {
+            background: linear-gradient(135deg, #f5af19 0%, #f12711 100%);
+            margin-top: 20px;
+            font-size: 18px;
+            padding: 18px;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+
+        .btn-pagar:hover {
+            box-shadow: 0 10px 30px rgba(241, 39, 17, 0.4);
+        }
+
+        .garantia-text {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-top: 15px;
         }
 
         .success-message {
@@ -271,11 +334,16 @@
             padding: 20px;
             background: #d4fc79;
             border-radius: 10px;
-            margin-top: 15px;
+            margin-bottom: 20px;
         }
 
         .success-message.active {
             display: block;
+        }
+
+        /* Ocultar formulario cuando se muestra oferta */
+        .lead-form.hidden {
+            display: none;
         }
 
         @media (max-width: 600px) {
@@ -284,6 +352,9 @@
             }
             h1 {
                 font-size: 24px;
+            }
+            .oferta-precio {
+                font-size: 36px;
             }
         }
     </style>
@@ -303,7 +374,7 @@
                     type="text" 
                     id="marca" 
                     name="marca" 
-                    placeholder="Ej: IBM, Nike, Tesla"
+                    placeholder="Ej: MiMarca, TuNegocio"
                     required
                 >
             </div>
@@ -351,6 +422,16 @@
             <!-- Formulario de captura de lead -->
             <div class="lead-form" id="leadForm">
                 <h3>📋 Déjanos tus datos</h3>
+                
+                <div class="success-message" id="successMessage">
+                    <p style="font-weight: 600; color: #1a202c; margin-bottom: 10px;">
+                        ✓ ¡Gracias! Hemos recibido tu información
+                    </p>
+                    <p style="color: #2d3748; font-size: 14px;">
+                        Con el análisis de viabilidad completo podemos encontrar la mejor forma de que tu registro sea exitoso.
+                    </p>
+                </div>
+
                 <form id="formLead">
                     <div class="form-group">
                         <label for="nombreLead">Nombre Completo *</label>
@@ -367,29 +448,41 @@
                         <input type="tel" id="telefonoLead" placeholder="+52 33 1234 5678" required>
                     </div>
 
-                    <button type="submit" class="btn btn-lead">
+                    <button type="submit" class="btn btn-lead" id="btnEnviarLead">
                         Enviar Información
                     </button>
                 </form>
 
-                <div class="success-message" id="successMessage">
-                    <p style="font-weight: 600; color: #1a202c; margin-bottom: 10px;">
-                        ✓ ¡Gracias! Hemos recibido tu información
-                    </p>
-                    <p style="color: #2d3748; font-size: 14px;">
-                        Nos pondremos en contacto contigo pronto
-                    </p>
-                </div>
+                <!-- Sección de Oferta (aparece después de enviar lead) -->
+                <div class="oferta-section" id="ofertaSection">
+                    <h3 style="font-size: 20px; margin-bottom: 5px;">🎯 Examen de Viabilidad Completo</h3>
+                    <p style="opacity: 0.9; font-size: 14px;">+ Asesoría Personalizada por Videollamada</p>
+                    
+                    <div class="oferta-precio">
+                        $950 <span>MXN</span>
+                    </div>
 
-                <button type="button" class="btn btn-calendar" id="btnCalendar">
-                    📅 Agendar Cita en Google Calendar
-                </button>
+                    <ul class="oferta-beneficios">
+                        <li>Análisis fonético y fonográfico completo</li>
+                        <li>Búsqueda exhaustiva de marcas similares</li>
+                        <li>Reporte PDF profesional detallado</li>
+                        <li>Asesoría 1-a-1 por Google Meet (30 min)</li>
+                        <li>Estrategias personalizadas para tu registro</li>
+                    </ul>
+
+                    <button type="button" class="btn btn-pagar" id="btnPagar">
+                        🛒 Quiero mi Examen de Viabilidad y Asesoría
+                    </button>
+
+                    <p class="garantia-text">🔒 Pago seguro con Mercado Pago</p>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
         let resultadoActual = null;
+        let linkPago = '';
 
         // Formulario principal de análisis
         document.getElementById('consultaForm').addEventListener('submit', async (e) => {
@@ -446,10 +539,11 @@
             `;
             document.getElementById('ctaText').textContent = data.cta;
 
-            // Reset formulario de lead
+            // Reset estados
+            document.getElementById('formLead').style.display = 'block';
             document.getElementById('formLead').reset();
             document.getElementById('successMessage').classList.remove('active');
-            document.getElementById('btnCalendar').classList.remove('active');
+            document.getElementById('ofertaSection').classList.remove('active');
 
             // Scroll al resultado
             resultado.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -468,12 +562,17 @@
                 return;
             }
 
+            const btn = document.getElementById('btnEnviarLead');
+            btn.disabled = true;
+            btn.textContent = 'Enviando...';
+
             const leadData = {
                 nombre,
                 email,
                 telefono,
                 marca: resultadoActual.marca,
                 tipo_negocio: resultadoActual.tipo_negocio,
+                clase_sugerida: resultadoActual.clase_sugerida,
                 resultado: resultadoActual.mensaje,
                 status_impi: resultadoActual.status_impi
             };
@@ -487,23 +586,41 @@
 
                 const data = await response.json();
 
-                if (response.ok) {
-                    // Mostrar mensaje de éxito
+                if (response.ok && data.success) {
+                    // Ocultar formulario y mostrar mensaje de éxito
+                    document.getElementById('formLead').querySelector('form').style.display = 'none';
                     document.getElementById('successMessage').classList.add('active');
-                    document.getElementById('formLead').style.display = 'none';
+                    
+                    // Mostrar oferta de pago
+                    document.getElementById('ofertaSection').classList.add('active');
+                    
+                    // Guardar link de pago
+                    if (data.oferta && data.oferta.link_pago) {
+                        linkPago = data.oferta.link_pago;
+                    }
 
-                    // Mostrar botón de calendar
-                    const btnCalendar = document.getElementById('btnCalendar');
-                    btnCalendar.classList.add('active');
-                    btnCalendar.onclick = () => {
-                        window.open(data.calendar_link, '_blank');
-                    };
+                    // Scroll a la oferta
+                    document.getElementById('ofertaSection').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 } else {
                     alert('Error al enviar: ' + (data.error || 'Error desconocido'));
+                    btn.disabled = false;
+                    btn.textContent = 'Enviar Información';
                 }
             } catch (error) {
                 alert('Error de conexión. Por favor intenta de nuevo.');
                 console.error(error);
+                btn.disabled = false;
+                btn.textContent = 'Enviar Información';
+            }
+        });
+
+        // Botón de pago
+        document.getElementById('btnPagar').addEventListener('click', () => {
+            if (linkPago) {
+                window.location.href = linkPago;
+            } else {
+                // Fallback al link por defecto
+                window.location.href = 'https://mpago.li/2xfRia';
             }
         });
     </script>
