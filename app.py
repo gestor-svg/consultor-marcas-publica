@@ -487,16 +487,17 @@ def capturar_lead():
     # Guardar en Sheets (esto es lo importante)
     sheets_ok = guardar_en_sheets(datos_lead, hoja="leads")
     
-    # Intentar enviar email en segundo plano (no bloquea si falla)
-    try:
-        threading.Thread(target=enviar_email_lead, args=(datos_lead.copy(),), daemon=True).start()
-    except:
-        print("[EMAIL] ⚠ No se pudo iniciar thread de email")
+    # Email desactivado temporalmente
+    # try:
+    #     threading.Thread(target=enviar_email_lead, args=(datos_lead.copy(),), daemon=True).start()
+    # except:
+    #     print("[EMAIL] ⚠ No se pudo iniciar thread de email")
     
     # Generar link de WhatsApp para notificación de nuevo lead
     whatsapp_link_lead = generar_whatsapp_lead_nuevo(datos_lead)
+    print(f"[WHATSAPP] Link generado: {whatsapp_link_lead[:80]}...")
     
-    # Responder éxito si Sheets funcionó (el email es secundario)
+    # Responder éxito
     return jsonify({
         "success": True,
         "mensaje": "¡Gracias! Hemos recibido tu información.",
