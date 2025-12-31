@@ -600,10 +600,7 @@
                         linkPago = data.oferta.link_pago;
                     }
 
-                    // Abrir WhatsApp con notificación del nuevo lead (en nueva pestaña)
-                    if (data.whatsapp_notificacion) {
-                        window.open(data.whatsapp_notificacion, '_blank');
-                    }
+                    // Notificación push enviada automáticamente en el backend (invisible para usuario)
 
                     // Scroll a la oferta
                     document.getElementById('ofertaSection').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
