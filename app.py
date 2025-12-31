@@ -187,21 +187,32 @@ INSTRUCCIONES:
 - No incluyas explicaciones adicionales
 
 EJEMPLOS DE RESPUESTA CORRECTA:
+45|Servicios jurídicos|Registro de marcas y patentes
 43|Restaurantes y cafeterías|Servicios de alimentación
 25|Prendas de vestir|Ropa y calzado
 9|Software y aplicaciones|Tecnología digital
 35|Publicidad y negocios|Servicios comerciales
 
-GUÍA RÁPIDA:
+GUÍA RÁPIDA DE CLASES:
+- Registro de marcas/patentes/propiedad intelectual = 45
+- Servicios legales/abogados/notarios = 45
+- Seguridad/vigilancia/investigación = 45
 - Bebidas sin alcohol = 32
 - Bebidas alcohólicas = 33
 - Alimentos procesados = 29
 - Pan, café, dulces = 30
-- Restaurantes/cafeterías = 43
-- Ropa/calzado = 25
-- Software/apps = 9
-- Servicios IT = 42
-- Publicidad/comercio = 35
+- Restaurantes/cafeterías/hoteles = 43
+- Ropa/calzado/sombreros = 25
+- Software/apps/electrónicos = 9
+- Desarrollo tecnológico/IT/programación = 42
+- Publicidad/marketing/comercio/franquicias = 35
+- Servicios médicos/clínicas/dentistas = 44
+- Salones de belleza/spa/estética = 44
+- Educación/capacitación/entretenimiento = 41
+- Transporte/logística/almacenamiento = 39
+- Construcción/reparación/instalación = 37
+- Telecomunicaciones = 38
+- Seguros/finanzas/bienes raíces = 36
 
 Responde ahora:"""
 
