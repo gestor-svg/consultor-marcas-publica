@@ -174,8 +174,8 @@ def clasificar_con_gemini(descripcion, tipo_negocio):
         }
     
     try:
-        # CORREGIDO: Usar modelo correcto gemini-1.5-flash
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # CORREGIDO: Usar modelo actual gemini-2.0-flash
+        model = genai.GenerativeModel('gemini-2.0-flash')
         
         prompt = f"""Eres un experto en clasificación de marcas según el sistema de Niza.
 
