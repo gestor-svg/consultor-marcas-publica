@@ -1,6 +1,6 @@
 import os
 import requests
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_from_directory
 from bs4 import BeautifulSoup
 import google.generativeai as genai
 import json
@@ -15,7 +15,7 @@ from urllib.parse import quote
 
 import threading
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 app.secret_key = os.environ.get("SECRET_KEY", "marcasegura-secret-key-2025")
 
 # --- CONFIGURACIÓN ---
@@ -181,7 +181,8 @@ Status: {datos_lead.get('status_impi', 'N/A')}"""
             headers={
                 "Title": titulo.encode('utf-8'),
                 "Priority": "high",
-                "Tags": "briefcase,dollar"
+                "Tags": "briefcase,dollar",
+                "Icon": "https://consultor-marcas-publica.onrender.com/static/logo.png"
             },
             timeout=10
         )
@@ -194,6 +195,43 @@ Status: {datos_lead.get('status_impi', 'N/A')}"""
             return False
     except Exception as e:
         print(f"[PUSH] ✗ Error: {e}")
+        return False
+
+
+def enviar_notificacion_push_pago(datos_facturacion):
+    """Envía notificación push cuando se completa el pago/facturación"""
+    try:
+        titulo = f"NUEVO CLIENTE: {datos_facturacion.get('email', 'Sin email')}"
+        mensaje = f"""PAGO COMPLETADO!
+Tel: {datos_facturacion.get('telefono', 'N/A')}
+Email: {datos_facturacion.get('email', 'N/A')}
+Factura: {datos_facturacion.get('requiere_factura', 'No')}"""
+        
+        if datos_facturacion.get('requiere_factura') == 'Si':
+            mensaje += f"""
+RFC: {datos_facturacion.get('rfc', 'N/A')}
+Razon Social: {datos_facturacion.get('razon_social', 'N/A')}"""
+
+        response = requests.post(
+            f"https://ntfy.sh/{NTFY_CHANNEL}",
+            data=mensaje.encode('utf-8'),
+            headers={
+                "Title": titulo.encode('utf-8'),
+                "Priority": "urgent",
+                "Tags": "white_check_mark,moneybag",
+                "Icon": "https://consultor-marcas-publica.onrender.com/static/logo.png"
+            },
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            print(f"[PUSH PAGO] ✓ Notificación enviada")
+            return True
+        else:
+            print(f"[PUSH PAGO] ✗ Error: {response.status_code}")
+            return False
+    except Exception as e:
+        print(f"[PUSH PAGO] ✗ Error: {e}")
         return False
 
 
@@ -632,6 +670,9 @@ def guardar_facturacion():
     
     guardar_en_sheets(datos_fact, hoja="facturacion")
     session['facturacion_data'] = datos_fact
+    
+    # Enviar notificación push de NUEVO CLIENTE (pago completado)
+    enviar_notificacion_push_pago(datos_fact)
     
     return jsonify({"success": True, "redirect": "/confirmacion"})
 
