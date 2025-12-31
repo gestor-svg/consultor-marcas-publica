@@ -42,17 +42,15 @@
         }
 
         .logo {
-            width: 80px;
-            height: 80px;
+            width: 100px;
+            height: 100px;
             margin: 0 auto 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 36px;
-            font-weight: bold;
+        }
+
+        .logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
 
         h1 {
@@ -196,6 +194,28 @@
             font-size: 48px;
             text-align: center;
             margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .icono-resultado img {
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+        }
+
+        .oferta-logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 15px;
+        }
+
+        .oferta-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
 
         .mensaje-resultado {
@@ -362,7 +382,9 @@
 <body>
     <div class="container">
         <div class="header">
-            <div class="logo">™</div>
+            <div class="logo">
+                <img src="/static/logo.png" alt="MarcaSegura">
+            </div>
             <h1>Consultor de Marcas</h1>
             <p class="subtitle">Verifica la disponibilidad de tu marca en México</p>
         </div>
@@ -414,7 +436,10 @@
         </div>
 
         <div class="resultado" id="resultado">
-            <div class="icono-resultado" id="iconoResultado"></div>
+            <div class="icono-resultado" id="iconoResultado">
+                <img src="/static/logo.png" alt="MarcaSegura">
+                <span id="iconoEmoji"></span>
+            </div>
             <div class="mensaje-resultado" id="mensajeResultado"></div>
             <div class="clase-info" id="claseInfo"></div>
             <p class="cta-text" id="ctaText"></p>
@@ -455,6 +480,9 @@
 
                 <!-- Sección de Oferta (aparece después de enviar lead) -->
                 <div class="oferta-section" id="ofertaSection">
+                    <div class="oferta-logo">
+                        <img src="/static/logo.png" alt="MarcaSegura">
+                    </div>
                     <h3 style="font-size: 20px; margin-bottom: 5px;">🎯 Examen de Viabilidad Completo</h3>
                     <p style="opacity: 0.9; font-size: 14px;">+ Asesoría Personalizada por Videollamada</p>
                     
@@ -531,7 +559,7 @@
             const resultado = document.getElementById('resultado');
             resultado.className = 'resultado active ' + data.color;
 
-            document.getElementById('iconoResultado').textContent = data.icono;
+            document.getElementById('iconoEmoji').textContent = data.icono;
             document.getElementById('mensajeResultado').textContent = data.mensaje;
             document.getElementById('claseInfo').innerHTML = `
                 <strong>Clasificación sugerida:</strong><br>
