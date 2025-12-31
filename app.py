@@ -35,6 +35,9 @@ APP_BASE_URL = os.environ.get("APP_BASE_URL", "https://consultor-marcas-publica.
 # DEBUG MODE
 DEBUG_IMPI = os.environ.get("DEBUG_IMPI", "false").lower() == "true"
 
+# NOTIFICACIONES PUSH (ntfy.sh)
+NTFY_CHANNEL = os.environ.get("NTFY_CHANNEL", "marcasegura-leads-2025")
+
 if API_KEY_GEMINI:
     genai.configure(api_key=API_KEY_GEMINI)
     print("✓ Gemini configurado")
@@ -160,6 +163,38 @@ def generar_whatsapp_lead_nuevo(datos_lead):
 💡 Seguimiento recomendado en 24-48 hrs si no compra.
 """
     return f"https://wa.me/{WHATSAPP_NUMERO}?text={quote(mensaje)}"
+
+
+def enviar_notificacion_push(datos_lead):
+    """Envía notificación push via ntfy.sh"""
+    try:
+        titulo = f"🆕 Nuevo Lead: {datos_lead.get('nombre', 'Sin nombre')}"
+        mensaje = f"""📱 {datos_lead.get('telefono', 'N/A')}
+📧 {datos_lead.get('email', 'N/A')}
+🏷️ Marca: {datos_lead.get('marca', 'N/A')}
+📊 {datos_lead.get('clase_sugerida', 'N/A')}
+📍 Status: {datos_lead.get('status_impi', 'N/A')}"""
+
+        response = requests.post(
+            f"https://ntfy.sh/{NTFY_CHANNEL}",
+            data=mensaje.encode('utf-8'),
+            headers={
+                "Title": titulo,
+                "Priority": "high",
+                "Tags": "briefcase,moneybag"
+            },
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            print(f"[PUSH] ✓ Notificación enviada")
+            return True
+        else:
+            print(f"[PUSH] ✗ Error: {response.status_code}")
+            return False
+    except Exception as e:
+        print(f"[PUSH] ✗ Error: {e}")
+        return False
 
 
 @lru_cache(maxsize=100)
@@ -532,11 +567,11 @@ def capturar_lead():
         sheets_ok = guardar_en_sheets(datos_lead, hoja="leads")
         print(f"[SHEETS] Resultado: {sheets_ok}")
         
-        # Generar link de WhatsApp para notificación
-        whatsapp_link_lead = generar_whatsapp_lead_nuevo(datos_lead)
-        print(f"[WHATSAPP] Link generado OK")
+        # Enviar notificación push (invisible para el usuario)
+        push_ok = enviar_notificacion_push(datos_lead)
+        print(f"[PUSH] Resultado: {push_ok}")
         
-        # Responder éxito
+        # Responder éxito (sin WhatsApp visible)
         respuesta = {
             "success": True,
             "mensaje": "¡Gracias! Hemos recibido tu información.",
@@ -554,7 +589,6 @@ def capturar_lead():
                 ],
                 "link_pago": MERCADO_PAGO_LINK,
             },
-            "whatsapp_notificacion": whatsapp_link_lead,
         }
         
         print(f"[RESPONSE] Enviando respuesta exitosa")
