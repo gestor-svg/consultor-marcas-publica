@@ -697,12 +697,16 @@ def confirmacion():
     lead_data = session.get('lead_data', {})
     fact_data = session.get('facturacion_data', {})
     telefono = fact_data.get('telefono', lead_data.get('telefono', ''))
+    email_cliente = fact_data.get('email', lead_data.get('email', ''))
+    nombre_cliente = lead_data.get('nombre', '')
     
     mensaje_wa = generar_mensaje_whatsapp(lead_data, fact_data)
     whatsapp_link = f"https://wa.me/{WHATSAPP_NUMERO}?text={quote(mensaje_wa)}"
     
     return render_template('confirmacion.html',
                          telefono=telefono,
+                         email_cliente=email_cliente,
+                         nombre_cliente=nombre_cliente,
                          cal_com_url=CAL_COM_URL,
                          whatsapp_link=whatsapp_link,
                          lead_data=lead_data)
