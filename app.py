@@ -184,6 +184,7 @@ def enviar_notificacion_push(datos_lead):
         mensaje = f"""Tel: {datos_lead.get('telefono', 'N/A')}
 Email: {datos_lead.get('email', 'N/A')}
 Marca: {datos_lead.get('marca', 'N/A')}
+Descripcion: {datos_lead.get('descripcion', 'N/A')}
 Clase: {datos_lead.get('clase_sugerida', 'N/A')}
 Status: {datos_lead.get('status_impi', 'N/A')}"""
 
@@ -602,6 +603,7 @@ def capturar_lead():
             'email': data.get('email', ''),
             'telefono': data.get('telefono', ''),
             'marca': data.get('marca', ''),
+            'descripcion': data.get('descripcion', ''),
             'tipo_negocio': data.get('tipo_negocio', ''),
             'clase_sugerida': data.get('clase_sugerida', ''),
             'status_impi': data.get('status_impi', ''),
