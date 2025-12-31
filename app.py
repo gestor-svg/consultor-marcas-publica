@@ -12,11 +12,23 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from urllib.parse import quote
+import pytz
 
 import threading
 
 app = Flask(__name__, static_folder='static')
 app.secret_key = os.environ.get("SECRET_KEY", "marcasegura-secret-key-2025")
+
+# Zona horaria de México
+MEXICO_TZ = pytz.timezone('America/Mexico_City')
+
+def obtener_fecha_mexico():
+    """Obtiene fecha actual en zona horaria de México"""
+    return datetime.now(MEXICO_TZ).strftime('%Y-%m-%d')
+
+def obtener_hora_mexico():
+    """Obtiene hora actual en zona horaria de México"""
+    return datetime.now(MEXICO_TZ).strftime('%H:%M:%S')
 
 # --- CONFIGURACIÓN ---
 API_KEY_GEMINI = os.environ.get("API_KEY_GEMINI")
@@ -135,7 +147,7 @@ def generar_mensaje_whatsapp(datos_lead, datos_facturacion=None):
     
     mensaje += f"""
 
-📅 Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+📅 Fecha: {datetime.now(MEXICO_TZ).strftime('%Y-%m-%d %H:%M')}
 💰 Pago: $950 MXN ✅
 """
     
@@ -157,7 +169,7 @@ def generar_whatsapp_lead_nuevo(datos_lead):
 • Clase: {datos_lead.get('clase_sugerida', 'N/A')}
 • Status: {datos_lead.get('status_impi', 'N/A')}
 
-📅 {datetime.now().strftime('%Y-%m-%d %H:%M')}
+📅 {datetime.now(MEXICO_TZ).strftime('%Y-%m-%d %H:%M')}
 ⏳ Pendiente de pago
 
 💡 Seguimiento recomendado en 24-48 hrs si no compra.
@@ -503,7 +515,7 @@ Marca: {datos_lead.get('marca', 'N/A')}
 Status: {datos_lead.get('status_impi', 'N/A')}
 Clase: {datos_lead.get('clase_sugerida', 'N/A')}
 
-Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+Fecha: {datetime.now(MEXICO_TZ).strftime('%Y-%m-%d %H:%M')}
         """
         
         mensaje = MIMEText(texto, 'plain', 'utf-8')
@@ -584,8 +596,8 @@ def capturar_lead():
         data = request.json
         
         datos_lead = {
-            'fecha': datetime.now().strftime('%Y-%m-%d'),
-            'hora': datetime.now().strftime('%H:%M:%S'),
+            'fecha': obtener_fecha_mexico(),
+            'hora': obtener_hora_mexico(),
             'nombre': data.get('nombre', ''),
             'email': data.get('email', ''),
             'telefono': data.get('telefono', ''),
@@ -653,8 +665,8 @@ def guardar_facturacion():
     data = request.json
     
     datos_fact = {
-        'fecha': datetime.now().strftime('%Y-%m-%d'),
-        'hora': datetime.now().strftime('%H:%M:%S'),
+        'fecha': obtener_fecha_mexico(),
+        'hora': obtener_hora_mexico(),
         'telefono': data.get('telefono', ''),
         'email': data.get('email', ''),
         'requiere_factura': data.get('requiere_factura', 'No'),

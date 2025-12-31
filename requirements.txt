@@ -1,6 +1,6 @@
-Flask==3.0.0
-requests==2.31.0
-beautifulsoup4==4.12.2
-google-generativeai==0.8.3
-gunicorn==21.2.0
-lxml==5.1.0
+flask
+requests
+beautifulsoup4
+google-generativeai
+gunicorn
+pytz
