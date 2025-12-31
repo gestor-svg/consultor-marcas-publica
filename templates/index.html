@@ -42,8 +42,8 @@
         }
 
         .logo {
-            width: 150px;
-            height: 150px;
+            width: 300px;
+            height: 200px;
             margin: 0 auto 20px;
         }
 
@@ -201,14 +201,14 @@
         }
 
         .icono-resultado img {
-            width: 80px;
-            height: 80px;
+            width: 120px;
+            height: 120px;
             object-fit: contain;
         }
 
         .oferta-logo {
-            width: 120px;
-            height: 120px;
+            width: 300px;
+            height: 200px;
             margin: 0 auto 15px;
         }
 
@@ -540,7 +540,7 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    mostrarResultado(data, marca, tipo);
+                    mostrarResultado(data, marca, tipo, descripcion);
                 } else {
                     alert('Error: ' + (data.error || 'Error desconocido'));
                 }
@@ -553,8 +553,8 @@
             }
         });
 
-        function mostrarResultado(data, marca, tipoNegocio) {
-            resultadoActual = { ...data, marca, tipo_negocio: tipoNegocio };
+        function mostrarResultado(data, marca, tipoNegocio, descripcion) {
+            resultadoActual = { ...data, marca, tipo_negocio: tipoNegocio, descripcion };
 
             const resultado = document.getElementById('resultado');
             resultado.className = 'resultado active ' + data.color;
@@ -600,6 +600,7 @@
                 email,
                 telefono,
                 marca: resultadoActual.marca,
+                descripcion: resultadoActual.descripcion,
                 tipo_negocio: resultadoActual.tipo_negocio,
                 clase_sugerida: resultadoActual.clase_sugerida,
                 resultado: resultadoActual.mensaje,
