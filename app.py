@@ -168,20 +168,20 @@ def generar_whatsapp_lead_nuevo(datos_lead):
 def enviar_notificacion_push(datos_lead):
     """Envía notificación push via ntfy.sh"""
     try:
-        titulo = f"🆕 Nuevo Lead: {datos_lead.get('nombre', 'Sin nombre')}"
-        mensaje = f"""📱 {datos_lead.get('telefono', 'N/A')}
-📧 {datos_lead.get('email', 'N/A')}
-🏷️ Marca: {datos_lead.get('marca', 'N/A')}
-📊 {datos_lead.get('clase_sugerida', 'N/A')}
-📍 Status: {datos_lead.get('status_impi', 'N/A')}"""
+        titulo = f"Nuevo Lead: {datos_lead.get('nombre', 'Sin nombre')}"
+        mensaje = f"""Tel: {datos_lead.get('telefono', 'N/A')}
+Email: {datos_lead.get('email', 'N/A')}
+Marca: {datos_lead.get('marca', 'N/A')}
+Clase: {datos_lead.get('clase_sugerida', 'N/A')}
+Status: {datos_lead.get('status_impi', 'N/A')}"""
 
         response = requests.post(
             f"https://ntfy.sh/{NTFY_CHANNEL}",
             data=mensaje.encode('utf-8'),
             headers={
-                "Title": titulo,
+                "Title": titulo.encode('utf-8'),
                 "Priority": "high",
-                "Tags": "briefcase,moneybag"
+                "Tags": "briefcase,dollar"
             },
             timeout=10
         )
