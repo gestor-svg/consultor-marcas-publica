@@ -721,6 +721,27 @@ def health():
     })
 
 
+# ============================================
+# PÁGINAS LEGALES
+# ============================================
+
+@app.route('/aviso-legal')
+def aviso_legal():
+    return render_template('aviso-legal.html')
+
+@app.route('/terminos-y-condiciones')
+def terminos_condiciones():
+    return render_template('terminos-y-condiciones.html')
+
+@app.route('/politica-de-privacidad')
+def politica_privacidad():
+    return render_template('politica-de-privacidad.html')
+
+@app.route('/aviso-de-cookies')
+def aviso_cookies():
+    return render_template('aviso-de-cookies.html')
+
+
 @app.route('/debug/test/<marca>')
 def debug_test(marca):
     return jsonify({"marca": marca, "resultado": buscar_impi_simple(marca)})
